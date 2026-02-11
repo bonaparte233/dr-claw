@@ -1,7 +1,7 @@
 {
-  "name": "Claude Code UI",
+  "name": "Vibe Lab",
   "short_name": "Claude UI",
-  "description": "Claude Code UI web application",
+  "description": "Vibe Lab web application",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

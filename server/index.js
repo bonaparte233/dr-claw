@@ -396,13 +396,13 @@ app.get('/api/projects/:projectName/sessions/:sessionId/messages', authenticateT
     try {
         const { projectName, sessionId } = req.params;
         const { limit, offset } = req.query;
-        
+
         // Parse limit and offset if provided
         const parsedLimit = limit ? parseInt(limit, 10) : null;
         const parsedOffset = offset ? parseInt(offset, 10) : 0;
-        
+
         const result = await getSessionMessages(projectName, sessionId, parsedLimit, parsedOffset);
-        
+
         // Handle both old and new response formats
         if (Array.isArray(result)) {
             // Backward compatibility: no pagination parameters were provided
@@ -485,13 +485,13 @@ const expandWorkspacePath = (inputPath) => {
 app.get('/api/browse-filesystem', authenticateToken, async (req, res) => {
     try {
         const { path: dirPath } = req.query;
-        
+
         console.log('[API] Browse filesystem request for path:', dirPath);
         console.log('[API] WORKSPACES_ROOT is:', WORKSPACES_ROOT);
         // Default to home directory if no path provided
         const defaultRoot = WORKSPACES_ROOT;
         let targetPath = dirPath ? expandWorkspacePath(dirPath) : defaultRoot;
-        
+
         // Resolve and normalize the path
         targetPath = path.resolve(targetPath);
 
@@ -501,22 +501,22 @@ app.get('/api/browse-filesystem', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: validation.error });
         }
         const resolvedPath = validation.resolvedPath || targetPath;
-        
+
         // Security check - ensure path is accessible
         try {
             await fs.promises.access(resolvedPath);
             const stats = await fs.promises.stat(resolvedPath);
-            
+
             if (!stats.isDirectory()) {
                 return res.status(400).json({ error: 'Path is not a directory' });
             }
         } catch (err) {
             return res.status(404).json({ error: 'Directory not accessible' });
         }
-        
+
         // Use existing getFileTree function with shallow depth (only direct children)
         const fileTree = await getFileTree(resolvedPath, 1, 0, false); // maxDepth=1, showHidden=false
-        
+
         // Filter only directories and format for suggestions
         const directories = fileTree
             .filter(item => item.type === 'directory')
@@ -532,7 +532,7 @@ app.get('/api/browse-filesystem', authenticateToken, async (req, res) => {
                 if (!aHidden && bHidden) return -1;
                 return a.name.localeCompare(b.name);
             });
-            
+
         // Add common directories if browsing home directory
         const suggestions = [];
         let resolvedWorkspaceRoot = defaultRoot;
@@ -545,17 +545,17 @@ app.get('/api/browse-filesystem', authenticateToken, async (req, res) => {
             const commonDirs = ['Desktop', 'Documents', 'Projects', 'Development', 'Dev', 'Code', 'workspace'];
             const existingCommon = directories.filter(dir => commonDirs.includes(dir.name));
             const otherDirs = directories.filter(dir => !commonDirs.includes(dir.name));
-            
+
             suggestions.push(...existingCommon, ...otherDirs);
         } else {
             suggestions.push(...directories);
         }
-        
+
         res.json({
             path: resolvedPath,
             suggestions: suggestions
         });
-        
+
     } catch (error) {
         console.error('Error browsing filesystem:', error);
         res.status(500).json({ error: 'Failed to browse filesystem' });
@@ -632,12 +632,14 @@ app.get('/api/projects/:projectName/file', authenticateToken, async (req, res) =
         const content = await fsPromises.readFile(resolved, 'utf8');
         res.json({ content, path: resolved });
     } catch (error) {
-        console.error('Error reading file:', error);
         if (error.code === 'ENOENT') {
+            // File not found is a normal condition (e.g. optional config files) — no noisy log
             res.status(404).json({ error: 'File not found' });
         } else if (error.code === 'EACCES') {
+            console.error('Permission denied reading file:', resolved);
             res.status(403).json({ error: 'Permission denied' });
         } else {
+            console.error('Error reading file:', error);
             res.status(500).json({ error: error.message });
         }
     }
@@ -1808,7 +1810,7 @@ async function startServer() {
 
             console.log('');
             console.log(c.dim('═'.repeat(63)));
-            console.log(`  ${c.bright('Claude Code UI Server - Ready')}`);
+            console.log(`  ${c.bright('Vibe Lab Server - Ready')}`);
             console.log(c.dim('═'.repeat(63)));
             console.log('');
             console.log(`${c.info('[INFO]')} Server URL:  ${c.bright('http://0.0.0.0:' + PORT)}`);
