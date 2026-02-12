@@ -160,18 +160,13 @@ pm2 save
 
 1. **克隆仓库:**
 ```bash
-git clone https://github.com/bbsngg/VibeLab.git
-cd VibeLab
+git clone https://github.com/siteboon/claudecodeui.git
+cd claudecodeui
 ```
 
 2. **安装依赖:**
 ```bash
 npm install
-```
-
-   若使用非标准登录 Shell（如 Nushell、Fish）或启动应用内终端时出现「posix_spawnp failed」，请在安装后从源码重新编译 node-pty：
-```bash
-npm rebuild node-pty --build-from-source
 ```
 
 3. **配置环境:**
@@ -330,7 +325,7 @@ Vibe Lab 在 `skills/` 目录下内置了 8 个模块化研究流水线技能：
 #### 入门
 1. **Fork** 仓库
 2. **克隆** 您的 fork: `git clone <your-fork-url>`
-3. **安装** 依赖: `npm install`（若遇到终端/spawn 相关错误，可执行 `npm rebuild node-pty --build-from-source`）
+3. **安装** 依赖: `npm install`
 4. **创建** 特性分支: `git checkout -b feature/amazing-feature`
 
 #### 开发流程
@@ -370,17 +365,6 @@ Vibe Lab 在 `skills/` 目录下内置了 8 个模块化研究流水线技能：
 - 验证项目路径存在且可访问
 - 查看服务器控制台日志以获取详细错误消息
 - 确保您未尝试访问项目范围之外的系统目录
-
-#### Shell/终端无法启动（"Error spawning process" 或 "posix_spawnp failed"）
-**问题**: 登录后，应用内终端无法启动；服务器日志出现 `Error spawning process` 或 `posix_spawnp failed`。
-**原因**: 当您的**登录 Shell** 为非标准 Shell（如 [Nushell](https://www.nushell.sh/)、Fish 或自定义 Shell）时，PTY 层在部分系统（常见于 macOS）上可能无法正确启动该 Shell。
-**解决方案**:
-- Vibe Lab 的**应用内终端不会使用您的登录 Shell**，而是使用内置的 **Bash** 会话（在 macOS/Linux 上为 `/bin/bash`），因此即使默认 Shell 是 Nushell 或 Fish，通常也可正常使用。
-- 若仍报错，请确认系统存在 `/bin/bash`：在系统终端中执行 `ls -l /bin/bash`。在 macOS 和多数 Linux 发行版上默认存在。
-- 若系统没有 `/bin/bash` 或为极简环境，请先安装 bash（如 `apt install bash` / `brew install bash`），并确保有 `/bin/bash`；若无法解决，可提交 issue 并说明您的系统和 Shell 环境。
-- **从源码重新编译 node-pty**（在项目目录下，执行 `npm install` 后）：`npm rebuild node-pty --build-from-source` — 在 macOS 或非标准 Shell 下常可解决 spawn 失败问题。
-
-另见：[claudecodeui #372](https://github.com/siteboon/claudecodeui/issues/372) 中同类问题及本修复说明。
 
 
 ## 许可证

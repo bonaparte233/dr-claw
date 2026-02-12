@@ -159,18 +159,13 @@ pm2 save
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/bbsngg/VibeLab.git
-cd VibeLab
+git clone https://github.com/siteboon/claudecodeui.git
+cd claudecodeui
 ```
 
 2. **Install dependencies:**
 ```bash
 npm install
-```
-
-   **If you use a non-standard login shell (e.g. Nushell, Fish) or see "posix_spawnp failed" when starting the in-app terminal**, rebuild node-pty from source after installing:
-```bash
-npm rebuild node-pty --build-from-source
 ```
 
 3. **Configure environment:**
@@ -331,7 +326,7 @@ We welcome contributions! Please follow these guidelines:
 #### Getting Started
 1. **Fork** the repository
 2. **Clone** your fork: `git clone <your-fork-url>`
-3. **Install** dependencies: `npm install` (if you hit shell/terminal spawn errors, run `npm rebuild node-pty --build-from-source`)
+3. **Install** dependencies: `npm install`
 4. **Create** a feature branch: `git checkout -b feature/amazing-feature`
 
 #### Development Process
@@ -371,17 +366,6 @@ We welcome contributions! Please follow these guidelines:
 - Verify the project path exists and is accessible
 - Review server console logs for detailed error messages
 - Ensure you're not trying to access system directories outside project scope
-
-#### Shell / terminal fails to start ("Error spawning process" or "posix_spawnp failed")
-**Problem**: After logging in, the in-app shell does not start; server logs show `Error spawning process` or `posix_spawnp failed`.
-**Cause**: This often happens when your **login shell** is a non-standard shell (e.g. [Nushell](https://www.nushell.sh/), Fish, or a custom shell) and the PTY layer cannot spawn it correctly on your OS (common on macOS).
-**Solutions**:
-- Vibe Lab **does not use your login shell** for the in-app terminal. It starts an internal **Bash** session (`/bin/bash` on macOS and Linux), so it should work even if your default shell is Nushell or Fish.
-- If you still see the error, ensure `/bin/bash` exists: run `ls -l /bin/bash` in your system terminal. On macOS and most Linux distributions it is present by default.
-- If `/bin/bash` is missing or you use a minimal system, install bash (e.g. `apt install bash` / `brew install bash`) and ensure it is available as `/bin/bash` or open an issue with your OS and shell setup.
-- **Rebuild node-pty from source** (in the project directory, after `npm install`): `npm rebuild node-pty --build-from-source` — this often fixes spawn failures on macOS or with non-standard shells.
-
-See also: [claudecodeui #372](https://github.com/siteboon/claudecodeui/issues/372) for the same class of issue and this fix.
 
 
 ## License

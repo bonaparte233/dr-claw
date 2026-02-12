@@ -32,7 +32,7 @@ The UI should send the chosen input (and type hint if available) to the backend 
 
 ## Flow after judgment
 
-- **Plan**: prepare (with ideas) → inno-code-survey (Plan mode: survey on ideas/papers) → implementation-plan → ml-dev-iteration → experiment-submit-refine. Use `run_infer.py` with `mode=plan` and `ideas=task1` or equivalent.
-- **Idea**: prepare → idea-generation → repo-acquisition → code-survey → implementation-plan → ml-dev-iteration → experiment-submit-refine. Use `run_infer_idea_ours.py` or equivalent.
+- **Plan**: prepare (with ideas) → inno-code-survey (Plan mode: survey on ideas/papers) → inno-experiment-dev (plan + implement + judge + submit) → inno-experiment-analysis (analyse + refine). Use `run_infer.py` with `mode=plan` and `ideas=task1` or equivalent.
+- **Idea**: prepare → idea-generation → code-survey (Phase A: repo acquisition + Phase B: code survey) → inno-experiment-dev (plan + implement + judge + submit) → inno-experiment-analysis (analyse + refine). Use `run_infer_idea_ours.py` or equivalent.
 
 Skills in `skills/` (VibeLab repo root) document inputs, outputs, and Python references for each step; the backend can call the existing Python entry points or re-use the same prompt/agent logic in another runtime. When a project is created, VibeLab symlinks these into the project's `.claude/skills/` so Claude can discover them.

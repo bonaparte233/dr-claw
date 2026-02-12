@@ -1,44 +1,292 @@
 ---
 name: inno-code-survey
-description: Conducts code survey (Idea mode) or survey on ideas and papers (Plan mode). Output is always stored as model_survey for implementation-plan. Use after idea-generation+repo (Idea) or after prepare (Plan).
+description: Acquires missing code repositories for the selected idea (Phase A) and conducts comprehensive code survey mapping academic concepts to implementations (Phase B). Outputs acquired_code_repos, updated_prepare_res, and model_survey for downstream use by inno-implementation-plan.
 ---
 
-# Inno Code Survey
+# Inno Code Survey (Repo Acquisition + Code Survey)
 
-Mirrors `_conduct_code_survey` and Plan-mode survey in [run_infer_idea_ours.py](workspace/medical/Medical_ai_scientist_idea/research_agent/run_infer_idea_ours.py) and [run_infer.py](workspace/medical/Medical_ai_scientist_idea/research_agent/run_infer.py). One skill for both Idea and Plan; downstream reads `model_survey` only.
+Merges `_acquire_missing_repos`, `_update_prepare_res_with_new_repos`, and `_conduct_code_survey` from [run_infer_idea_ours.py](workspace/medical/Medical_ai_scientist_idea/research_agent/run_infer_idea_ours.py) (lines 639–828, 1038–1052) into a single two-phase skill.
+
+## Directory structure
+
+```
+skills/inno-code-survey/
+├── SKILL.md                                          ← this file
+├── prompts/
+│   ├── build_repo_acquisition_query.md               ← Phase A query template
+│   └── build_code_survey_query.md                    ← Phase B query template
+├── references/
+│   ├── repo_acquisition_agent.md                     ← Phase A agent system prompt & tools
+│   └── code_survey_agent.md                          ← Phase B agent system prompt & tools
+└── scripts/
+    └── github_search_clone.py                        ← GitHub search + clone helper
+```
+
+## Path conventions
+
+All file paths use `<local_root>`, which resolves to:
+
+```
+<project_path>/outputs/workplace_paper/task_<instance_id>_<mode>/workplace/
+```
+
+| Path | Contents |
+|------|----------|
+| `<local_root>/papers/` | Downloaded arXiv LaTeX sources (`.tex`, `.txt`, `.md`) |
+| `<local_root>/<repo_name>/` | Cloned GitHub repositories |
+
+`<cache_path>` = `<project_path>/outputs/cache/cache_<instance_id>_<mode>/`
 
 ## Inputs
 
-- **Idea mode**: `survey_res` / `refined_for_downstream`, `updated_download_res`, `extra_repo_info`, `context_variables`
-- **Plan mode**: `ideas`, `references`, `prepare_res`, `download_res`, `context_variables`
+These are aligned with outputs from **inno-idea-generation** and **inno-prepare-resources**:
+
+| Input | Source | Description |
+|-------|--------|-------------|
+| `selected_idea` | `<cache_path>/selected_idea.txt` or `final_selected_idea_data` | The finalized selected idea (full markdown) |
+| `download_res` | `inno-prepare-resources` output | Result log from downloading arXiv paper sources |
+| `prepare_res` | `inno-prepare-resources` output (JSON) | Contains `reference_codebases` and `reference_paths` |
+| `context_variables` | Shared context dict | Accumulated pipeline context |
+| `pipeline_config.json` | `<project_path>/outputs/cache/` | For `local_root`, `cache_path`, `workplace_name`, `date_limit` |
 
 ## Outputs
 
-- `code_survey_res` or `survey_res` stored as `context_variables["model_survey"]`; optionally structured notes
+| Output | Description | Consumer |
+|--------|-------------|----------|
+| `acquired_code_repos` | Dict of `{name: path}` for newly cloned repos | Phase B, cache |
+| `updated_prepare_res` | `prepare_res` JSON with new repos merged into `reference_codebases` / `reference_paths` | Downstream pipeline |
+| `extra_repo_info` | Formatted string listing acquired repos | Phase B query |
+| `model_survey` | Comprehensive code survey implementation report | `inno-implementation-plan` |
 
-## Instructions
+---
 
-### Idea mode
+## Phase A — Repo Acquisition
 
-1. Optional short pre-wait (e.g. 1s) to avoid rate limits.
-2. Build `code_survey_query = build_code_survey_query(survey_res, updated_download_res, extra_repo_info)`. Call **code_survey_agent** with `messages = [{"role": "user", "content": code_survey_query}]`.
-3. Set `context_variables["model_survey"] = code_survey_res` (last message content). Optional short post-wait.
+> Full template & parameter docs: [prompts/build_repo_acquisition_query.md](prompts/build_repo_acquisition_query.md)
+> Agent system prompt & tools: [references/repo_acquisition_agent.md](references/repo_acquisition_agent.md)
 
-### Plan mode
+Maps to `_acquire_missing_repos` (lines 745–792) + `_update_prepare_res_with_new_repos` (lines 639–686).
 
-1. Build `survey_query = build_survey_query_for_plan(ideas, references, prepare_res, download_res)`. Call **survey_agent** (not code_survey_agent) with `messages = [{"role": "user", "content": survey_query}]`.
-2. Set `context_variables["model_survey"] = survey_res` (last message content).
+### Step A1: Analyze the selected idea and identify gaps
 
-Downstream **inno-implementation-plan** reads only `model_survey`; it does not need to know the source.
+Read `selected_idea` and identify 2–3 **missing technical components** — novel or specialized parts that are likely NOT in the standard repos already present in `<local_root>/`.
+
+### Step A2: Search GitHub using the "Cascade" strategy
+
+For each missing component, perform **6 distinct queries** using progressive decomposition:
+
+1. **Level 1 (Specific)**: Search for the exact mechanism name
+2. **Level 2 (Broad)**: Strip context adjectives, search core technique
+3. **Level 3 (Atomic)**: Search for 3 base mathematical operators
+
+Use the helper script or GitHub API directly:
+
+```bash
+# Option 1: Helper script
+python scripts/github_search_clone.py --query "sinkhorn attention pytorch" --limit 5 --date-limit 2025-12-31
+
+# Option 2: Direct GitHub API via curl
+curl -s "https://api.github.com/search/repositories?q=sinkhorn+attention&per_page=5" \
+  -H "Accept: application/vnd.github.v3+json"
+```
+
+### Step A3: Clone selected repos
+
+Clone the best candidate for each gap into `<local_root>/`:
+
+```bash
+GIT_TERMINAL_PROMPT=0 git clone --depth 1 <clone_url> <local_root>/<repo_name>
+```
+
+### Step A4: Verify each clone
+
+For each cloned repo:
+1. Read `README.md`: `cat <local_root>/<repo_name>/README.md`
+2. Check language and domain relevance
+3. Reject repos that don't match (wrong domain, empty, HTML-only)
+
+### Step A5: Build `acquired_code_repos` and update `prepare_res`
+
+1. Build `acquired_code_repos` dict from verified clones:
+   ```json
+   {
+     "repo_name_1": "<local_root>/repo_name_1",
+     "repo_name_2": "<local_root>/repo_name_2"
+   }
+   ```
+2. Set `context_variables["acquired_code_repos"] = acquired_code_repos`
+3. Parse `prepare_res` JSON, ensure `reference_codebases` and `reference_paths` arrays exist
+4. For each entry in `acquired_code_repos`, if `path` not already in `reference_paths`:
+   - Append repo name to `reference_codebases`
+   - Append repo path to `reference_paths`
+5. Serialize back to JSON as `updated_prepare_res`
+
+### Step A6: Save Phase A cache
+
+1. Build `extra_repo_info` string:
+   ```
+   - Name: <name1> | Path: <path1>
+   - Name: <name2> | Path: <path2>
+   ```
+   (Empty string if no repos acquired)
+
+2. Write `<cache_path>/agents/repo_acquisition_agent.json`:
+   ```json
+   {
+     "context_variables": {
+       "working_dir": "workplace",
+       "local_root": "<local_root>",
+       "workplace_name": "<workplace_name>",
+       "cache_path": "<cache_path>",
+       "date_limit": "YYYY-MM-DD",
+       "prepare_result": { ... },
+       "acquired_code_repos": {
+         "<name>": "<path>",
+         ...
+       },
+       "updated_prepare_res": "<JSON string of updated prepare_res>"
+     }
+   }
+   ```
+
+---
+
+## Phase B — Code Survey
+
+> Full template & parameter docs: [prompts/build_code_survey_query.md](prompts/build_code_survey_query.md)
+> Agent system prompt & tools: [references/code_survey_agent.md](references/code_survey_agent.md)
+
+Maps to `_conduct_code_survey` (lines 794–828).
+
+### Step B1: Build the code survey query
+
+Construct the query using `selected_idea`, `download_res`, and `extra_repo_info` (from Phase A):
+
+```
+I have an innovative idea related to machine learning:
+{selected_idea}
+
+I have carefully gone through these papers' github repositories and found download
+some of them in my local machine, in the directory `<local_root>`, use `ls`, `tree`,
+and `find` to navigate the directory.
+And I have also downloaded the corresponding paper (LaTeX sources, markdown, txt),
+with the following information:
+{download_res}
+
+{extra_repo_info_block}
+
+Your task is to carefully understand the innovative idea, and thoroughly review
+codebases and generate a comprehensive implementation report for the innovative
+idea. You can NOT stop to review the codebases until you have get all academic
+concepts in the innovative idea.
+
+Note that the code implementation should be as complete as possible.
+```
+
+### Step B2: Survey all repos in `<local_root>/`
+
+Use Linux commands to navigate and read code:
+
+| Action | Command |
+|--------|---------|
+| List repos | `ls <local_root>/` or `tree <local_root>/ -L 1` |
+| View repo structure | `tree <local_root>/<repo>/ -L 3` |
+| Find Python files | `find <local_root>/<repo>/ -name "*.py" -type f` |
+| Read source file | `cat <local_root>/<repo>/model/attention.py` |
+| Search across repos | `rg "class.*Attention" <local_root>/` or `grep -rn "sinkhorn" <local_root>/` |
+| Read specific lines | `sed -n '100,200p' <local_root>/<repo>/file.py` |
+
+### Step B3: Map each innovative module to code
+
+For each atomic academic concept in the idea:
+1. Identify the mathematical formula
+2. Locate the corresponding implementation across repos
+3. Extract complete code snippets with file paths and function signatures
+
+### Step B4: Generate comprehensive implementation report
+
+The report must include for each concept:
+- **Academic definition** — the concept name
+- **Mathematical formula** — precise formulation
+- **Code implementation** — real code from repos (not pseudocode)
+- **Reference papers** — which papers define this
+- **Reference codebases** — which repos implement it, with file paths
+
+### Step B5: Store result
+
+Set `context_variables["model_survey"] = code_survey_response` (the full implementation report text).
+
+### Step B6: Save Phase B cache
+
+Write `<cache_path>/agents/code_survey_agent.json`:
+
+```json
+{
+  "context_variables": {
+    "working_dir": "workplace",
+    "local_root": "<local_root>",
+    "workplace_name": "<workplace_name>",
+    "cache_path": "<cache_path>",
+    "date_limit": "YYYY-MM-DD",
+    "prepare_result": { ... },
+    "acquired_code_repos": { ... },
+    "notes": [
+      {
+        "definition": "<atomic concept>",
+        "math_formula": "<formula>",
+        "code_implementation": "<code snippet>",
+        "reference_papers": ["<paper1>"],
+        "reference_codebases": ["<repo1>"]
+      }
+    ],
+    "model_survey": "<FULL text of the comprehensive implementation report>"
+  }
+}
+```
+
+**IMPORTANT**: The `model_survey` field must contain the **complete** report text — never a summary or abbreviation.
+
+---
+
+## Tool mappings (reference -> Linux/Claude Code)
+
+| Reference tool | Replacement |
+|---|---|
+| `search_github_repos_wrapper` | `python scripts/github_search_clone.py --query "..." --limit 5` or `curl` to GitHub API |
+| `tracked_execute_command` (git clone) | `GIT_TERMINAL_PROMPT=0 git clone --depth 1 <url> <local_root>/<name>` |
+| `list_files` | `ls`, `find`, `tree` |
+| `read_file` | `cat`, `head`, `tail`, `sed -n` |
+| `gen_code_tree_structure` | `tree -L 3` |
+| `terminal_page_down/up/to` | N/A (not needed with `cat`/`less`) |
+| `search_github_code` | `rg`, `grep -rn` across local repos |
+
+---
 
 ## Checklist
 
-- [ ] Mode determined (Idea vs Plan) from inputs.
-- [ ] Idea: `build_code_survey_query` + code_survey_agent; Plan: `build_survey_query_for_plan` + survey_agent.
-- [ ] `context_variables["model_survey"]` set.
-- [ ] No distinction exposed to downstream.
+### Phase A (Repo Acquisition)
+- [ ] Selected idea analyzed; 2-3 missing components identified
+- [ ] Cascade search performed (6 queries per gap across 3 levels)
+- [ ] Best candidates cloned into `<local_root>/`
+- [ ] Each clone verified (README.md read, domain/language checked)
+- [ ] `context_variables["acquired_code_repos"]` set as dict `{name: path}`
+- [ ] `prepare_res` updated with new `reference_codebases` / `reference_paths`
+- [ ] `extra_repo_info` string built for Phase B
+- [ ] `<cache_path>/agents/repo_acquisition_agent.json` written
+
+### Phase B (Code Survey)
+- [ ] Code survey query built with `selected_idea` + `download_res` + `extra_repo_info`
+- [ ] All repos in `<local_root>/` surveyed using `tree`, `cat`, `grep`, `find`
+- [ ] Every atomic academic concept in the idea has matching code identified
+- [ ] Implementation report includes: code snippets, file paths, function signatures, formula-to-code mappings
+- [ ] `context_variables["model_survey"]` set with full report text
+- [ ] `<cache_path>/agents/code_survey_agent.json` written with complete `model_survey`
+
+---
 
 ## References
 
-- run_infer_idea_ours.py: `_conduct_code_survey` (794–828). Prompts: `build_code_survey_query`.
-- run_infer.py: `_conduct_survey` (362–390). Prompts: `build_survey_query_for_plan`; agent: survey_agent.
+- `run_infer_idea_ours.py`: `_acquire_missing_repos` (745–792), `_update_prepare_res_with_new_repos` (639–686), `_conduct_code_survey` (794–828)
+- Prompts: `build_repo_acquisition_query` (prompt_templates.py:153–171), `build_code_survey_query` (prompt_templates.py:173–200)
+- Agents: `repo_agent.py` (Repo Acquisition Agent definition + tools), `survey_agent.py` (Code Survey Agent definition)
+- Cache examples: `repo_acquisition_agent.json`, `code_survey_agent.json` from reference pipeline output

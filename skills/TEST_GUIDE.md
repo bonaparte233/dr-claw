@@ -27,7 +27,7 @@
 - max_iter_times: 1
 
 请使用 task2（背景描述）作为输入，走 idea 分支：
-prepare → idea-generation → repo-acquisition → code-survey → implementation-plan → ml-dev → submit/refine
+prepare → idea-generation → code-survey (Phase A + B) → implementation-plan → ml-dev → submit/refine
 ```
 
 **预期输出**:
@@ -172,14 +172,14 @@ cache/agents/*_final_refinement.json (×6)                → 专家精炼
 
 ---
 
-## 3. inno-repo-acquisition (单独测试)
+## 3. inno-code-survey (单独测试 — Phase A: Repo Acquisition + Phase B: Code Survey)
 
-### 测试 3.1: 为选中的 idea 获取所需代码库
+### 测试 3.1: Phase A — 为选中的 idea 获取所需代码库
 
 **输入 Prompt**:
 
 ```
-请执行 inno-repo-acquisition 技能。
+请执行 inno-code-survey 技能的 Phase A（Repo Acquisition）。
 
 前置条件:
 - 选中的 idea: "BioSinkhorn-Span: Joint 2D Span Scoring with Sinkhorn Normalization and Question-Conditional Sparse Biases for BioASQ Factoid QA"
@@ -191,7 +191,7 @@ cache/agents/*_final_refinement.json (×6)                → 专家精炼
   - BiDAF-style attention
 - 已有代码库: TorchGlove, GloVe-PyTorch, mikolov_word2vec
 
-请搜索 GitHub 并克隆与上述技术相关的代码仓库到 /workplace/ 目录下。
+请搜索 GitHub 并克隆与上述技术相关的代码仓库到 <local_root>/ 目录下。
 完成后报告:
 - 新获取的仓库列表（名称 + 路径）
 - 更新后的 prepare_res（reference_codebases 和 reference_paths）
@@ -219,16 +219,19 @@ acquired_code_repos:
   pytorch-struct             → /workplace/pytorch-struct
 ```
 
+**验证缓存**:
+```
+cache/agents/repo_acquisition_agent.json → context_variables.acquired_code_repos 非空
+```
+
 ---
 
-## 4. inno-code-survey (单独测试)
-
-### 测试 4.1: 对获取的代码库进行 code survey
+### 测试 3.2: Phase B — 对获取的代码库进行 code survey
 
 **输入 Prompt**:
 
 ```
-请执行 inno-code-survey 技能（Idea 模式）。
+请执行 inno-code-survey 技能的 Phase B（Code Survey）。
 
 前置条件:
 - 选中的 idea: "BioSinkhorn-Span" — 包含 3 个模块:
@@ -236,7 +239,7 @@ acquired_code_repos:
   Module 2: Question-Conditional Sparse Attention and Char-N-gram Overlap Bias
   Module 3: Question-Conditioned Span-Length Prior
 
-- 可用代码库（路径在 /workplace/ 下）:
+- 可用代码库（路径在 <local_root>/ 下）:
   TorchGlove, GloVe-PyTorch, mikolov_word2vec,
   entmax, geomloss, textdistance, pytorch-struct, parser, SuperGluePretrainedNetwork, numerical-tours
 
@@ -258,32 +261,45 @@ acquired_code_repos:
 **验证**:
 ```
 context_variables.model_survey → 非空字符串，包含 "geomloss", "entmax", "textdistance" 等关键词
+cache/agents/code_survey_agent.json → context_variables.model_survey 完整
 ```
 
 ---
 
-## 5. inno-implementation-plan (单独测试)
+## 4. inno-experiment-dev (单独测试)
 
-### 测试 5.1: 生成详细的实现计划
+### 测试 4.1: 生成实现计划 + 实现代码 + Judge 迭代 + 提交实验
 
 **输入 Prompt**:
 
 ```
-请执行 inno-implementation-plan 技能。
+请执行 inno-experiment-dev 技能。
 
 前置条件:
 - Idea: "BioSinkhorn-Span" (3 个模块: Sinkhorn joint scoring, entmax sparse attention, span-length prior)
 - Code survey 结果: Module1→geomloss, Module2→entmax+textdistance, Module3→pytorch-struct
 - 参考代码库: entmax, geomloss, textdistance, pytorch-struct, parser 等
 - 数据集: BioASQ Factoid QA (位于 /workplace/dataset_candidate/bioasq/)
+- workplace_name: workplace
+- max_iter_times: 1
 
-请生成一份完整的实现计划，包括:
+请完成全部 3 个阶段:
+
+Phase 1 - 实现计划:
 1. 数据处理计划: 如何读取 BioASQ 数据、tokenization、span alignment
 2. 模型架构: BiLSTM encoder, BiDAF attention, Sinkhorn joint scoring, entmax marginals, length prior
 3. 训练配置: optimizer (Adam), learning rate, batch size, max epochs
 4. 损失函数: joint NLL + length KL regularization
 5. 测试方案: Strict Accuracy, Lenient Accuracy, MRR
 6. 文件布局: project/ 目录结构
+
+Phase 2 - 代码实现与 Judge 迭代:
+1. 根据实现计划创建项目目录结构和 Python 文件
+2. 实现模型并用 Judge 评审，最多迭代 1 次
+
+Phase 3 - 提交实验:
+1. 调整 epochs (3-10)，运行完整实验
+2. 确保模型 checkpoint 被保存
 ```
 
 **预期输出**:
@@ -293,54 +309,12 @@ context_variables.model_survey → 非空字符串，包含 "geomloss", "entmax"
 | dataset_plan | 包含 `read_data`（Python reader 代码）, `data_preprocessing`（tokenization + span alignment）, `data_dataloader`（PyTorch Dataset/DataLoader） |
 | training_plan | 包含 `training_pipeline`（模型骨架代码）, `loss_function`（L_joint + β_len L_len）, `optimizer`（Adam, lr=2e-3）, `training_configurations` |
 | testing_plan | 包含 `test_metric`（SAcc, LAcc, MRR 定义 + Python 代码）, `test_data`（BioASQ test files）, `test_function`（评估循环代码） |
-| 代码片段 | 应包含 Sinkhorn forward pass 伪代码、entmax 调用示例、Biaffine 使用示例 |
-
-**验证缓存**:
-```
-cache/agents/coding_plan_agent.json → context_variables 包含 dataset_plan, training_plan, testing_plan
-```
-
----
-
-## 6. inno-ml-dev-iteration (单独测试)
-
-### 测试 6.1: 实现代码并进行 Judge 迭代
-
-**输入 Prompt**:
-
-```
-请执行 inno-ml-dev-iteration 技能。
-
-前置条件:
-- Idea: "BioSinkhorn-Span"
-- 实现计划已就绪（dataset, model, training, testing 全部有详细方案）
-- 代码库: entmax, geomloss, textdistance 等已在 /workplace/ 下
-- 数据集: /workplace/dataset_candidate/bioasq/ (BioASQ factoid JSON files)
-- workplace_name: workplace
-- max_iter_times: 1
-
-请完成:
-1. 根据实现计划创建项目目录结构和 Python 文件
-2. 实现模型（BiLSTM + BiDAF + Sinkhorn + entmax + length prior）
-3. 让 Judge Agent 评审代码实现
-4. 根据 Judge 反馈进行一轮迭代修复
-
-报告:
-- 创建了哪些文件和目录
-- Judge 评审的结论（fully_correct 还是需要修改）
-- 如果有迭代，修复了什么问题
-```
-
-**预期输出**:
-
-| 检查项 | 预期值 |
-|--------|--------|
-| 创建的目录 | `project/data/`, `project/model/`, `project/training/`, `project/testing/`, `project/data_processing/` |
-| 创建的文件 | 至少包含: 模型定义文件、数据加载文件、训练脚本、测试脚本 |
+| 创建的目录 | `project/data/`, `project/model/`, `project/training/`, `project/testing/`, `project/data_processing/`, `project/checkpoints/` |
+| 创建的文件 | 至少包含: 模型定义文件、数据加载文件、训练脚本、测试脚本、`run_training_testing.py` |
 | Judge 评审 | 将 idea 分解为 atomic checks，逐一验证代码实现 |
 | `fully_correct` | 可能为 `false`（需要修改） |
 | 迭代修复 | 修复 tensor size mismatch、import errors 等运行时问题 |
-| judge_messages | 返回完整的 judge 对话记录，供下一步使用 |
+| submit_res | 包含完整训练/测试结果（3-10 epochs），checkpoint 已保存 |
 
 **参考（nlp_qa_1 实际运行中遇到的错误）**:
 ```
@@ -351,26 +325,35 @@ raw_error_stats:
   RuntimeError (Boolean value of Tensor ambiguous): 1
 ```
 
+**验证缓存**:
+```
+cache/agents/coding_plan_agent.json              → context_variables 包含 dataset_plan, training_plan, testing_plan
+cache/agents/machine_learning_agent.json         → 初始实现
+cache/agents/judge_agent.json                    → Judge 评审结果
+cache/agents/machine_learning_agent_iter_submit.json → 提交实验结果
+```
+
 ---
 
-## 7. inno-experiment-submit-refine (单独测试)
+## 5. inno-experiment-analysis (单独测试)
 
-### 测试 7.1: 提交实验并分析结果
+### 测试 5.1: 分析实验结果并改进
 
 **输入 Prompt**:
 
 ```
-请执行 inno-experiment-submit-refine 技能。
+请执行 inno-experiment-analysis 技能。
 
 前置条件:
-- ML 实现已完成（经过 Judge 迭代），代码在 /workplace/project/ 下
+- ML 实现已完成并提交（经过 inno-experiment-dev），代码在 /workplace/project/ 下
 - 数据集: /workplace/dataset_candidate/bioasq/
 - judge_messages: 来自上一步的完整对话记录
 - workplace_name: workplace
+- exp_iter_times: 1
 
 请完成:
-1. Submit: 运行训练 + 测试流水线，记录实验结果
-2. Experiment Analysis: 分析实验结果，生成 analysis_report
+1. Analyze: 分析实验结果，生成 analysis_report，绘制图表
+2. Code Suggestions: 基于分析给出改进计划 (further_plan)
 3. Refine: 基于分析结果改进代码并重新运行
 
 报告:
@@ -378,22 +361,30 @@ raw_error_stats:
 - 测试指标（如果有: SAcc, LAcc, MRR）
 - 分析报告的主要发现
 - 改进计划的具体步骤
+- 改进后的实验结果
 ```
 
 **预期输出**:
 
 | 检查项 | 预期值 |
 |--------|--------|
-| submit_res | 包含 `run_log`（训练/测试日志）, `analysis`, `implementation_checks`, `suggestions` |
-| 训练日志 | 包含 epoch 数、loss 变化 |
 | experiment_report | 包含 `analysis_report`（详细分析）和 `further_plan`（改进步骤字典） |
-| 改进步骤 | 多个具体的改进行动（如 A1: 修复 embedding, A2: 调整 lr, ... A12） |
+| analysis_report | 包含详细的结果分析、root cause 分析、与 idea 的关联分析 |
+| further_plan | 多个具体的改进行动（如 A1: 修复 embedding, A2: 调整 lr, ... A12） |
+| 改进实现 | ML Agent 根据 further_plan 修改代码并重新运行实验 |
+| 图表 | 可能包含 loss curves、accuracy 对比图等 |
 
 **参考（nlp_qa_1 实际运行结果）**:
 ```
 experiment_report 包含:
   analysis_report: 详细的结果分析、root cause 分析、alignment checks
   further_plan: 12 个改进步骤 (A1-A12)
+```
+
+**验证缓存**:
+```
+cache/agents/experiment_analysis_agent_iter_refine_1.json → experiment_report 非空
+cache/agents/machine_learning_agent_iter_refine_1.json   → 改进后的代码和结果
 ```
 
 ---
@@ -417,29 +408,24 @@ experiment_report 包含:
 我的研究方向是 BioASQ biomedical factoid QA。参考论文涉及 neural QA、GloVe、biomedical word2vec。请帮我生成多个创新 idea 并选择最佳方案。
 ```
 
-### 触发 repo-acq:
+### 触发 code-survey (Phase A — repo acquisition)：
 ```
 我的 idea 是 "BioSinkhorn-Span"，需要 Sinkhorn normalization、entmax sparse attention、character n-gram overlap 相关的代码库。请从 GitHub 搜索并克隆相关仓库。
 ```
 
-### 触发 code-survey:
+### 触发 code-survey (Phase B — code survey):
 ```
 请对 /workplace/ 下的代码库（entmax, geomloss, textdistance, pytorch-struct, parser）进行 code survey，分析哪些文件可以复用来实现 BioSinkhorn-Span 的三个模块。
 ```
 
-### 触发 impl-plan:
+### 触发 experiment-dev:
 ```
-请根据 code survey 结果和 BioSinkhorn-Span idea，生成详细的实现计划，包括数据处理、模型架构、训练配置、测试方案。数据集在 /workplace/dataset_candidate/bioasq/。
-```
-
-### 触发 ml-dev:
-```
-请根据实现计划开始编写 BioSinkhorn-Span 的代码。在 /workplace/project/ 下创建项目结构，实现模型并用 Judge 评审，最多迭代 1 次。
+请根据 code survey 结果和 BioSinkhorn-Span idea，生成详细的实现计划，编写代码并用 Judge 评审（最多迭代 1 次），最后提交实验运行。数据集在 /workplace/dataset_candidate/bioasq/。
 ```
 
-### 触发 submit/refine:
+### 触发 experiment-analysis:
 ```
-代码实现已完成。请运行训练和测试实验，分析结果，并基于分析进行改进。数据集在 /workplace/dataset_candidate/bioasq/。
+代码实现已提交并有初始实验结果。请分析结果、绘制图表、给出改进建议，并实现改进后重新运行实验。数据集在 /workplace/dataset_candidate/bioasq/。
 ```
 
 ---

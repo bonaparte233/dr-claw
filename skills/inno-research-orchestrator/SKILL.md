@@ -267,18 +267,15 @@ Also remind the user of the full pipeline that will follow:
 **Plan-level pipeline:**
 1. inno-prepare-resources (with `ideas`)
 2. inno-code-survey
-3. inno-implementation-plan
-4. inno-ml-dev-iteration
-5. inno-experiment-submit-refine
+3. inno-experiment-dev (plan + implement + judge + submit)
+4. inno-experiment-analysis (analyse + refine)
 
 **Idea-level pipeline:**
 1. inno-prepare-resources
 2. inno-idea-generation
-3. inno-repo-acquisition
-4. inno-code-survey
-5. inno-implementation-plan
-6. inno-ml-dev-iteration
-7. inno-experiment-submit-refine
+3. inno-code-survey (Phase A: repo acquisition + Phase B: code survey)
+4. inno-experiment-dev (plan + implement + judge + submit)
+5. inno-experiment-analysis (analyse + refine)
 
 The user may then say "proceed", "run prepare", or manually invoke `inno-prepare-resources`.
 
@@ -375,4 +372,4 @@ The user may then say "proceed", "run prepare", or manually invoke `inno-prepare
 
 - Instance JSON schema: `{"source_papers": [...], "task1": "...", "task2": "...", "instance_id": "...", "url": "..."}`
 - Category → dataset mapping: built-in categories ship with a `metaprompt.py` providing `TASK`, `DATASET`, `BASELINE`, `COMPARISON`, `EVALUATION`
-- Downstream skills: `inno-prepare-resources`, `inno-idea-generation`, `inno-code-survey`, `inno-implementation-plan`, `inno-ml-dev-iteration`, `inno-experiment-submit-refine`
+- Downstream skills: `inno-prepare-resources`, `inno-idea-generation`, `inno-code-survey` (Phase A: repo acquisition + Phase B: code survey), `inno-experiment-dev` (plan + implement + judge + submit), `inno-experiment-analysis` (analyse + refine)
