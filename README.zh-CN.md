@@ -145,8 +145,9 @@ Idea 生成 (Idea Generation)  →  生成 5 个多样化 Idea，选择并精炼
 - **生成的 Idea** — 以富 Markdown 渲染，支持 LaTeX 数学公式
 - **流水线产物** — 按阶段分组，内置查看/编辑器
 - **实验结果** — 训练日志、评估指标、分析报告、图表
+- **论文** — 运行论文撰写技能后，可在仪表盘中直接查看或打开 **main.pdf**（位于 `Publication/paper/`）
 
-所有数据存储在项目目录的 `instance.json`、`pipeline_config.json`、`Ideation/` 和 `Experiment/` 中。
+所有数据存储在项目目录的 `instance.json`、`pipeline_config.json`、`Ideation/`、`Experiment/` 和 `Publication/` 中。
 
 > **提示**：您也可以直接提供一份 *完整的实现计划* 而不是研究主题。编排器会将其识别为 *plan 级别*，跳过 Idea 生成，直接进入代码调研和实验开发阶段。
 
@@ -215,8 +216,9 @@ Idea 生成 (Idea Generation)  →  生成 5 个多样化 Idea，选择并精炼
 - **最终选定 Idea** — 富 Markdown 渲染，支持 LaTeX 数学公式（KaTeX）、GFM 表格、代码块。支持一键复制和折叠展开
 - **流水线配置** — 实例路径、任务级别、类别、数据集
 - **研究产物** — 日志文件按流水线阶段分组，支持展开/折叠导航和内置查看/编辑器
+- **论文（main.pdf）** — 若已运行论文撰写技能并生成了草稿，编译后的 **main.pdf** 会在页面内嵌显示，也可在新标签页中打开以便全屏阅读
 
-数据从项目内的 `instance.json`、`pipeline_config.json`、`Ideation/` 和 `Experiment/` 目录加载。
+数据从项目内的 `instance.json`、`pipeline_config.json`、`Ideation/`、`Experiment/` 和 `Publication/` 目录加载。
 
 #### InnoFlow 研究流水线
 

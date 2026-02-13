@@ -520,6 +520,97 @@ function IdeaCard({ projectName, config }) {
   );
 }
 
+/** Paper (main.pdf) viewer — shows Publication/paper/main.pdf when present */
+function PaperCard({ projectName, projectRoot }) {
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [status, setStatus] = useState('loading'); // 'loading' | 'loaded' | 'not_found' | 'error'
+  const [expanded, setExpanded] = useState(true);
+
+  useEffect(() => {
+    if (!projectName || !projectRoot) {
+      setStatus('not_found');
+      return;
+    }
+    const absolutePath = `${projectRoot.replace(/\\/g, '/').replace(/\/+$/, '')}/Publication/paper/main.pdf`;
+    setStatus('loading');
+    setPdfUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    api.getFileContentBlob(projectName, absolutePath)
+      .then((blob) => {
+        setPdfUrl(URL.createObjectURL(blob));
+        setStatus('loaded');
+      })
+      .catch((err) => {
+        setStatus(err?.message === 'Not found' ? 'not_found' : 'error');
+      });
+    return () => {
+      setPdfUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+  }, [projectName, projectRoot]);
+
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div
+        className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <PenTool className="w-4 h-4 text-purple-500 dark:text-purple-400" />
+          Paper (main.pdf)
+        </h3>
+        {status === 'loaded' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (pdfUrl) window.open(pdfUrl, '_blank', 'noopener');
+            }}
+          >
+            <ExternalLink className="w-3.5 h-3.5 mr-1" />
+            Open in new tab
+          </Button>
+        )}
+        <ChevronDown className={`w-4 h-4 text-muted-foreground flex-shrink-0 ml-2 transition-transform ${expanded ? '' : '-rotate-90'}`} />
+      </div>
+      {expanded && (
+        <div className="border-t border-border">
+          {status === 'loading' && (
+            <div className="p-6 text-center text-sm text-muted-foreground">Loading paper…</div>
+          )}
+          {status === 'loaded' && pdfUrl && (
+            <div className="relative w-full" style={{ minHeight: '60vh' }}>
+              <iframe
+                title="Paper (main.pdf)"
+                src={pdfUrl}
+                className="w-full border-0 rounded-b-lg"
+                style={{ height: '70vh' }}
+              />
+            </div>
+          )}
+          {status === 'not_found' && (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              <p>No <code className="bg-muted px-1 rounded">main.pdf</code> found.</p>
+              <p className="mt-1">Run the <strong>inno-paper-writing</strong> skill and output the paper to <code className="bg-muted px-1 rounded">Publication/paper/</code> to view it here.</p>
+            </div>
+          )}
+          {status === 'error' && (
+            <div className="p-6 text-center text-sm text-destructive">
+              Failed to load the paper. Check that <code className="bg-muted px-1 rounded">Publication/paper/main.pdf</code> exists and try again.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** File viewer / editor panel */
 function FileViewer({ projectName, file, onClose }) {
   const [content, setContent] = useState('');
@@ -704,7 +795,10 @@ function ResearchLab({ selectedProject }) {
             {/* Row 3: Final Idea (markdown) */}
             <IdeaCard projectName={projectName} config={config} />
 
-            {/* Row 4: Artifacts */}
+            {/* Row 4: Paper (main.pdf) */}
+            <PaperCard projectName={projectName} projectRoot={projectRoot} />
+
+            {/* Row 5: Artifacts */}
             {artifacts.length > 0 && (
               <ArtifactsCard
                 artifacts={artifacts}
@@ -713,7 +807,7 @@ function ResearchLab({ selectedProject }) {
               />
             )}
 
-            {/* Row 5: File Viewer */}
+            {/* Row 6: File Viewer */}
             {selectedFile && (
               <FileViewer
                 projectName={projectName}

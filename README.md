@@ -145,8 +145,9 @@ Switch to the **Research Lab** tab to see:
 - **Generated Ideas** — rendered as rich Markdown with LaTeX math formulas
 - **Pipeline Artifacts** — grouped by stage, with built-in viewer/editor
 - **Experiment Results** — training logs, metrics, analysis reports, charts
+- **Paper** — when the paper writing skill has run, view or open **main.pdf** (in `Publication/paper/`) directly in the dashboard
 
-All data lives in `instance.json`, `pipeline_config.json`, `Ideation/`, and `Experiment/` inside the project directory.
+All data lives in `instance.json`, `pipeline_config.json`, `Ideation/`, `Experiment/`, and `Publication/` inside the project directory.
 
 > **Tip**: You can also provide a *full implementation plan* instead of a topic. The orchestrator will detect it as *plan-level* and skip idea generation, jumping straight to code survey and experiment development.
 
@@ -215,8 +216,9 @@ The **Research Lab** tab is designed for structured, multi-step AI research. It 
 - **Final Selected Idea** — Rich Markdown rendering with LaTeX math (KaTeX), GFM tables, code blocks. Copy-to-clipboard and collapsible view
 - **Pipeline Configuration** — Instance path, task level, category, dataset
 - **Research Artifacts** — Log files grouped by pipeline stage with expand/collapse navigation and built-in viewer/editor
+- **Paper (main.pdf)** — If the paper writing skill has produced a draft, the compiled **main.pdf** is shown in an embedded viewer; you can open it in a new tab for full-screen reading
 
-Data is loaded from `instance.json`, `pipeline_config.json`, `Ideation/`, and `Experiment/` within the project.
+Data is loaded from `instance.json`, `pipeline_config.json`, `Ideation/`, `Experiment/`, and `Publication/` within the project.
 
 #### InnoFlow Research Pipeline
 
