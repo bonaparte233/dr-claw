@@ -133,6 +133,9 @@ Experiment Dev        →  Creates implementation plan, writes full project code
   ↓
 Experiment Analysis   →  Analyzes results, draws charts, suggests improvements,
                          implements refinements, runs further experiments
+  ↓
+Paper Writing         →  Writes paper in LaTeX using conference templates,
+                         manages citations, and formats the final PDF
 ```
 
 Each step produces cache artifacts (JSON logs) that you can inspect in the **Research Lab** dashboard.

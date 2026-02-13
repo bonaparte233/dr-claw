@@ -133,6 +133,9 @@ Idea 生成 (Idea Generation)  →  生成 5 个多样化 Idea，选择并精炼
   ↓
 实验分析 (Experiment Analysis) →  分析结果，绘制图表，给出改进建议，
                                   实现改进，运行进一步实验
+  ↓
+论文撰写 (Paper Writing)       →  使用会议模板编写 LaTeX 论文，
+                                  管理引用并格式化最终 PDF
 ```
 
 每个步骤都会产生缓存产物（JSON 日志），您可以在 **Research Lab** 仪表盘中查看。
