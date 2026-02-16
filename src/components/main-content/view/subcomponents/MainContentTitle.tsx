@@ -18,6 +18,10 @@ function getTabTitle(activeTab: AppTab, shouldShowTasksTab: boolean, t: (key: st
     return t('tabs.git');
   }
 
+  if (activeTab === 'researchlab') {
+    return t('tabs.researchLab');
+  }
+
   if (activeTab === 'tasks' && shouldShowTasksTab) {
     return 'TaskMaster';
   }

@@ -4,6 +4,7 @@ import ChatInterface from '../../chat/view/ChatInterface';
 import FileTree from '../../FileTree';
 import StandaloneShell from '../../StandaloneShell';
 import GitPanel from '../../GitPanel';
+import ResearchLab from '../../ResearchLab';
 import ErrorBoundary from '../../ErrorBoundary';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
@@ -154,6 +155,12 @@ function MainContent({
           {activeTab === 'git' && (
             <div className="h-full overflow-hidden">
               <AnyGitPanel selectedProject={selectedProject} isMobile={isMobile} onFileOpen={handleFileOpen} />
+            </div>
+          )}
+
+          {activeTab === 'researchlab' && (
+            <div className="h-full overflow-hidden">
+              <ResearchLab selectedProject={selectedProject} />
             </div>
           )}
 
