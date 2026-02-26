@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
 import FileTree from '../../FileTree';
@@ -11,6 +11,7 @@ import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
 import EditorSidebar from './subcomponents/EditorSidebar';
 import TaskMasterPanel from './subcomponents/TaskMasterPanel';
+import LatexLoadingFallback from './subcomponents/LatexLoadingFallback';
 import type { MainContentProps } from '../types/types';
 
 import { useTaskMaster } from '../../../contexts/TaskMasterContext';
@@ -21,6 +22,7 @@ import type { Project } from '../../../types/app';
 
 const AnyStandaloneShell = StandaloneShell as any;
 const AnyGitPanel = GitPanel as any;
+const LazyLatexEditingPanel = lazy(() => import('./subcomponents/LatexEditingPanel'));
 
 type TaskMasterContextValue = {
   currentProject?: Project | null;
@@ -57,6 +59,7 @@ function MainContent({
 }: MainContentProps) {
   const { preferences } = useUiPreferences();
   const { autoExpandTools, showRawParameters, showThinking, autoScrollToBottom, sendByCtrlEnter } = preferences;
+  const [preferredLatexFilePath, setPreferredLatexFilePath] = useState('');
 
   const { currentProject, setCurrentProject } = useTaskMaster() as TaskMasterContextValue;
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings() as TasksSettingsContextValue;
@@ -88,6 +91,21 @@ function MainContent({
       setActiveTab('chat');
     }
   }, [shouldShowTasksTab, activeTab, setActiveTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'latex') {
+      setPreferredLatexFilePath('');
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    setPreferredLatexFilePath('');
+  }, [selectedProject?.name]);
+
+  const handleOpenInLatexEditing = useCallback((texPath: string) => {
+    setPreferredLatexFilePath(texPath || '');
+    setActiveTab('latex');
+  }, [setActiveTab]);
 
   if (isLoading) {
     return <MainContentStateView mode="loading" isMobile={isMobile} onMenuClick={onMenuClick} />;
@@ -142,7 +160,12 @@ function MainContent({
 
           {activeTab === 'files' && (
             <div className="h-full overflow-hidden">
-              <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
+              <FileTree
+                selectedProject={selectedProject}
+                onFileOpen={handleFileOpen}
+                activeFilePath={editingFile?.path || ''}
+                onOpenInLatexEditing={handleOpenInLatexEditing}
+              />
             </div>
           )}
 
@@ -164,13 +187,26 @@ function MainContent({
             </div>
           )}
 
+          {activeTab === 'latex' && (
+            <div className="h-full overflow-hidden">
+              <ErrorBoundary showDetails onRetry={() => setActiveTab('latex')}>
+                <Suspense fallback={<LatexLoadingFallback message="Loading LaTeX Editing..." />}>
+                  <LazyLatexEditingPanel
+                    selectedProject={selectedProject}
+                    preferredTexPath={preferredLatexFilePath}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            </div>
+          )}
+
           {shouldShowTasksTab && <TaskMasterPanel isVisible={activeTab === 'tasks'} />}
 
           <div className={`h-full overflow-hidden ${activeTab === 'preview' ? 'block' : 'hidden'}`} />
         </div>
 
         <EditorSidebar
-          editingFile={editingFile}
+          editingFile={activeTab === 'latex' ? null : editingFile}
           isMobile={isMobile}
           editorExpanded={editorExpanded}
           editorWidth={editorWidth}

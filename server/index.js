@@ -41,6 +41,7 @@ import { spawn } from 'child_process';
 import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
 import { queryClaudeSDK, abortClaudeSDKSession, isClaudeSDKSessionActive, getActiveClaudeSDKSessions, resolveToolApproval } from './claude-sdk.js';
@@ -213,6 +214,42 @@ const PTY_SESSION_TIMEOUT = 30 * 60 * 1000;
 const SHELL_URL_PARSE_BUFFER_LIMIT = 32768;
 const ANSI_ESCAPE_SEQUENCE_REGEX = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))/g;
 const TRAILING_URL_PUNCTUATION_REGEX = /[)\]}>.,;:!?]+$/;
+const LATEXLAB_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.LATEXLAB_ENABLED || 'false').toLowerCase());
+const LATEXLAB_API_PREFIX = normalizeProxyPrefix(process.env.LATEXLAB_API_PREFIX || '/latexlab-api');
+const LATEXLAB_API_TARGET = process.env.LATEXLAB_API_TARGET || 'http://localhost:8787';
+const LATEXLAB_PROXY_TIMEOUT_MS = Number(process.env.LATEXLAB_PROXY_TIMEOUT_MS || 120000);
+
+function normalizeProxyPrefix(value = '') {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === '/') {
+        return '/';
+    }
+    const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return withLeadingSlash.replace(/\/+$/g, '');
+}
+
+function rewriteLatexLabApiPath(incomingPath, req) {
+    const originalPath = req?.originalUrl || incomingPath;
+    if (originalPath === LATEXLAB_API_PREFIX) {
+        return '/api';
+    }
+    if (originalPath.startsWith(`${LATEXLAB_API_PREFIX}/`)) {
+        return `/api${originalPath.slice(LATEXLAB_API_PREFIX.length)}`;
+    }
+    return originalPath;
+}
+
+function handleLatexLabProxyError(label, isApi, error, req, res) {
+    console.error(`[ERROR] ${label} proxy failed for ${req.method} ${req.originalUrl}:`, error.message);
+    if (res.headersSent) {
+        return;
+    }
+    if (isApi) {
+        res.status(503).json({ ok: false, error: 'LatexLab service unavailable' });
+        return;
+    }
+    res.status(503).send('LatexLab service unavailable');
+}
 
 function stripAnsiSequences(value = '') {
     return value.replace(ANSI_ESCAPE_SEQUENCE_REGEX, '');
@@ -319,6 +356,9 @@ app.use(cors());
 app.use(express.json({
   limit: '50mb',
   type: (req) => {
+    if (req.originalUrl === LATEXLAB_API_PREFIX || req.originalUrl.startsWith(`${LATEXLAB_API_PREFIX}/`)) {
+      return false;
+    }
     // Skip multipart/form-data requests (for file uploads like images)
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
@@ -378,6 +418,20 @@ app.use('/api/codex', authenticateToken, codexRoutes);
 
 // Agent API Routes (uses API key authentication)
 app.use('/api/agent', agentRoutes);
+
+if (LATEXLAB_ENABLED) {
+  const latexLabApiProxy = createProxyMiddleware({
+    target: LATEXLAB_API_TARGET,
+    changeOrigin: true,
+    ws: false,
+    proxyTimeout: LATEXLAB_PROXY_TIMEOUT_MS,
+    timeout: LATEXLAB_PROXY_TIMEOUT_MS,
+    pathRewrite: rewriteLatexLabApiPath,
+    onError: (error, req, res) => handleLatexLabProxyError('LatexLab API', true, error, req, res),
+  });
+
+  app.use(LATEXLAB_API_PREFIX, latexLabApiProxy);
+}
 
 // Serve public files (like api-docs.html)
 app.use(express.static(path.join(__dirname, '../public')));
@@ -1210,8 +1264,11 @@ function handleShellConnection(ws) {
 
                     console.log('🔧 Executing shell command:', shellCommand);
 
-                    // Use appropriate shell based on platform
-                    const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+                    // Use appropriate shell based on platform.
+                    // Prefer absolute shell paths on Unix to avoid PATH-related posix_spawnp failures.
+                    const shell = os.platform() === 'win32'
+                        ? 'powershell.exe'
+                        : ((process.env.SHELL && process.env.SHELL.trim()) || '/bin/bash');
                     const shellArgs = os.platform() === 'win32' ? ['-Command', shellCommand] : ['-c', shellCommand];
 
                     // Use terminal dimensions from client if provided, otherwise use defaults
@@ -1219,18 +1276,40 @@ function handleShellConnection(ws) {
                     const termRows = data.rows || 24;
                     console.log('📐 Using terminal dimensions:', termCols, 'x', termRows);
 
-                    shellProcess = pty.spawn(shell, shellArgs, {
-                        name: 'xterm-256color',
-                        cols: termCols,
-                        rows: termRows,
-                        cwd: os.homedir(),
-                        env: {
-                            ...process.env,
-                            TERM: 'xterm-256color',
-                            COLORTERM: 'truecolor',
-                            FORCE_COLOR: '3'
+                    try {
+                        shellProcess = pty.spawn(shell, shellArgs, {
+                            name: 'xterm-256color',
+                            cols: termCols,
+                            rows: termRows,
+                            cwd: os.homedir(),
+                            env: {
+                                ...process.env,
+                                PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin',
+                                TERM: 'xterm-256color',
+                                COLORTERM: 'truecolor',
+                                FORCE_COLOR: '3'
+                            }
+                        });
+                    } catch (primarySpawnError) {
+                        if (os.platform() !== 'win32') {
+                            console.warn('[WARN] Primary shell spawn failed, retrying with /bin/sh:', primarySpawnError.message);
+                            shellProcess = pty.spawn('/bin/sh', ['-c', shellCommand], {
+                                name: 'xterm-256color',
+                                cols: termCols,
+                                rows: termRows,
+                                cwd: os.homedir(),
+                                env: {
+                                    ...process.env,
+                                    PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin',
+                                    TERM: 'xterm-256color',
+                                    COLORTERM: 'truecolor',
+                                    FORCE_COLOR: '3'
+                                }
+                            });
+                        } else {
+                            throw primarySpawnError;
                         }
-                    });
+                    }
 
                     console.log('🟢 Shell process started with PTY, PID:', shellProcess.pid);
 
@@ -1923,6 +2002,10 @@ async function startServer() {
 
         if (!isProduction) {
             console.log(`${c.warn('[WARN]')} Note: Requests will be proxied to Vite dev server at ${c.dim('http://localhost:' + (process.env.VITE_PORT || 5173))}`);
+        }
+
+        if (LATEXLAB_ENABLED) {
+            console.log(`${c.info('[INFO]')} LatexLab API Proxy: ${c.dim(`${LATEXLAB_API_PREFIX} -> ${LATEXLAB_API_TARGET}`)}`);
         }
 
         server.listen(PORT, '0.0.0.0', async () => {

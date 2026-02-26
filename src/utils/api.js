@@ -171,6 +171,21 @@ export const api = {
       body: JSON.stringify({ path: folderPath }),
     }),
 
+  latexLab: {
+    openFromVibeLab: ({ sourceProjectRoot, sourceTexPath }) =>
+      authenticatedFetch('/latexlab-api/projects/open-from-vibelab', {
+        method: 'POST',
+        body: JSON.stringify({ sourceProjectRoot, sourceTexPath }),
+      }),
+    listTemplates: () =>
+      authenticatedFetch('/latexlab-api/templates'),
+    applyTemplate: ({ projectId, template }) =>
+      authenticatedFetch(`/latexlab-api/projects/${encodeURIComponent(projectId)}/template`, {
+        method: 'POST',
+        body: JSON.stringify({ template }),
+      }),
+  },
+
   // User endpoints
   user: {
     gitConfig: () => authenticatedFetch('/api/user/git-config'),

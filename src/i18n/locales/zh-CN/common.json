@@ -23,7 +23,8 @@
     "files": "文件",
     "git": "源代码管理",
     "tasks": "任务",
-    "researchLab": "研究实验室"
+    "researchLab": "研究实验室",
+    "latexEditing": "LaTeX 编辑"
   },
   "researchLabGuide": {
     "title": "如何正确使用 VibeLab",

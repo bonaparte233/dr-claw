@@ -23,7 +23,8 @@
     "files": "Files",
     "git": "Source Control",
     "tasks": "Tasks",
-    "researchLab": "Research Lab"
+    "researchLab": "Research Lab",
+    "latexEditing": "Latex Editing"
   },
   "researchLabGuide": {
     "title": "How to use VibeLab correctly",

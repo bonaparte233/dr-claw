@@ -23,14 +23,27 @@
     "url": "https://github.com/siteboon/claudecodeui/issues"
   },
   "scripts": {
-    "dev": "concurrently --kill-others \"npm run server\" \"npm run client\"",
+    "dev": "concurrently --kill-others \"LATEXLAB_ENABLED=true npm run server\" \"vite --host --port 5173\" \"npm run latexlab:dev:embedded\"",
     "server": "node server/index.js",
     "client": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "npm run build && npm run server",
-    "release": "./release.sh"
+    "release": "./release.sh",
+    "dev:vibelab": "concurrently --kill-others \"npm run server\" \"vite --host --port 5173\"",
+    "latexlab:install": "npm install --prefix apps/latexlab/apps/backend && npm install --prefix apps/latexlab/apps/frontend",
+    "latexlab:dev": "npm run latexlab:dev:backend",
+    "latexlab:dev:embedded": "npm run latexlab:dev:backend",
+    "latexlab:dev:backend": "npm --prefix apps/latexlab/apps/backend run dev",
+    "latexlab:dev:frontend": "npm --prefix apps/latexlab/apps/frontend run dev",
+    "latexlab:build": "npm --prefix apps/latexlab/apps/frontend run build",
+    "latexlab:preview": "npm --prefix apps/latexlab/apps/frontend run preview",
+    "latexlab:tunnel": "LATEXLAB_TUNNEL=localtunnel node apps/latexlab/apps/backend/src/index.js",
+    "latexlab:tunnel:cf": "LATEXLAB_TUNNEL=cloudflared node apps/latexlab/apps/backend/src/index.js",
+    "latexlab:tunnel:ngrok": "LATEXLAB_TUNNEL=ngrok node apps/latexlab/apps/backend/src/index.js",
+    "latexlab:start": "node apps/latexlab/apps/backend/src/index.js",
+    "dev:latex": "npm run dev"
   },
   "keywords": [
     "claude code",
@@ -72,6 +85,7 @@
     "express": "^4.18.2",
     "fuse.js": "^7.0.0",
     "gray-matter": "^4.0.3",
+    "http-proxy-middleware": "^3.0.5",
     "i18next": "^25.7.4",
     "i18next-browser-languagedetector": "^8.2.0",
     "jsonwebtoken": "^9.0.2",

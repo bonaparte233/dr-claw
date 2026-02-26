@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Folder, Terminal, GitBranch, ClipboardCheck, FlaskConical } from 'lucide-react';
+import { MessageSquare, Folder, Terminal, GitBranch, ClipboardCheck, FlaskConical, ScrollText } from 'lucide-react';
 import { useTasksSettings } from '../contexts/TasksSettingsContext';
 
 function MobileNav({ activeTab, setActiveTab, isInputFocused }) {
@@ -12,6 +12,12 @@ function MobileNav({ activeTab, setActiveTab, isInputFocused }) {
       icon: FlaskConical,
       label: 'Lab',
       onClick: () => setActiveTab('researchlab')
+    },
+    {
+      id: 'latex',
+      icon: ScrollText,
+      label: 'LaTeX',
+      onClick: () => setActiveTab('latex')
     },
     {
       id: 'chat',

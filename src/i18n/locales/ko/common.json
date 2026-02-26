@@ -23,7 +23,8 @@
     "files": "파일",
     "git": "소스 관리",
     "tasks": "작업",
-    "researchLab": "Research Lab"
+    "researchLab": "Research Lab",
+    "latexEditing": "LaTeX 편집"
   },
   "researchLabGuide": {
     "title": "VibeLab 올바른 사용 방법",

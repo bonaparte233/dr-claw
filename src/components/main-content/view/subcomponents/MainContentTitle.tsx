@@ -22,6 +22,10 @@ function getTabTitle(activeTab: AppTab, shouldShowTasksTab: boolean, t: (key: st
     return t('tabs.researchLab');
   }
 
+  if (activeTab === 'latex') {
+    return t('tabs.latexEditing');
+  }
+
   if (activeTab === 'tasks' && shouldShowTasksTab) {
     return 'TaskMaster';
   }

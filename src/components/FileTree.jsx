@@ -259,7 +259,7 @@ function getFileIconData(filename) {
 
 // ─── Component ───────────────────────────────────────────────────────
 
-function FileTree({ selectedProject, onFileOpen }) {
+function FileTree({ selectedProject, onFileOpen, activeFilePath, onOpenInLatexEditing }) {
   const { t } = useTranslation();
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -385,6 +385,11 @@ function FileTree({ selectedProject, onFileOpen }) {
     return imageExtensions.includes(ext);
   };
 
+  const isTexPath = (filePath) => typeof filePath === 'string' && filePath.toLowerCase().endsWith('.tex');
+
+  const activeTexPath = isTexPath(activeFilePath) ? activeFilePath : '';
+  const canOpenInLatexLab = Boolean(activeTexPath);
+
   const getFileIcon = (filename) => {
     const { icon: Icon, color } = getFileIconData(filename);
     return <Icon className={cn(ICON_SIZE, color)} />;
@@ -404,6 +409,11 @@ function FileTree({ selectedProject, onFileOpen }) {
     } else if (onFileOpen) {
       onFileOpen(item.path);
     }
+  };
+
+  const handleOpenInLatexLab = () => {
+    if (!canOpenInLatexLab || typeof onOpenInLatexEditing !== 'function') return;
+    onOpenInLatexEditing(activeTexPath);
   };
 
   // ── Indent guide + folder/file icon rendering ──
@@ -618,7 +628,18 @@ function FileTree({ selectedProject, onFileOpen }) {
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('fileTree.files')}
           </h3>
-          <div className="flex gap-0.5">
+          <div className="flex gap-1">
+            {canOpenInLatexLab && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={handleOpenInLatexLab}
+                title={activeTexPath}
+              >
+                {t('Open in Latex Editing')}
+              </Button>
+            )}
             <Button
               variant={viewMode === 'simple' ? 'default' : 'ghost'}
               size="sm"

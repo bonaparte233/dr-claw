@@ -1,4 +1,4 @@
-import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, FlaskConical, type LucideIcon } from 'lucide-react';
+import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, FlaskConical, ScrollText, type LucideIcon } from 'lucide-react';
 import Tooltip from '../../../Tooltip';
 import type { AppTab } from '../../../../types/app';
 import type { Dispatch, SetStateAction } from 'react';
@@ -18,6 +18,7 @@ type TabDefinition = {
 
 const BASE_TABS: TabDefinition[] = [
   { id: 'researchlab', labelKey: 'tabs.researchLab', icon: FlaskConical },
+  { id: 'latex', labelKey: 'tabs.latexEditing', icon: ScrollText },
   { id: 'chat', labelKey: 'tabs.chat', icon: MessageSquare },
   { id: 'shell', labelKey: 'tabs.shell', icon: Terminal },
   { id: 'files', labelKey: 'tabs.files', icon: Folder },
