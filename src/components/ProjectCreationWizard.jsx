@@ -79,7 +79,7 @@ const ProjectCreationWizard = ({ onClose, onProjectCreated }) => {
         setWorkspacePath((currentPath) => (currentPath.trim() ? currentPath : suggestedPath));
       } catch (error) {
         console.error('Error auto-filling workspace path:', error);
-        const fallbackPath = `~/${suggestedName}`;
+        const fallbackPath = `~/vibelab/${suggestedName}`;
         setWorkspacePath((currentPath) => (currentPath.trim() ? currentPath : fallbackPath));
       }
     };

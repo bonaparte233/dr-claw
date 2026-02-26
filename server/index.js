@@ -2274,6 +2274,9 @@ async function startServer() {
             console.log(`${c.tip('[TIP]')}  Run "vibelab status" for full configuration details`);
             console.log('');
 
+            // Ensure the workspaces root directory exists
+            await fsPromises.mkdir(WORKSPACES_ROOT, { recursive: true });
+
             // Start watching the projects folder for changes
             await setupProjectsWatcher();
         });

@@ -49,7 +49,7 @@ export default function SidebarContent({
 }: SidebarContentProps) {
   return (
     <div
-      className="h-full flex flex-col bg-background/80 backdrop-blur-sm md:select-none md:w-72"
+      className="h-full flex flex-col bg-background/80 backdrop-blur-sm md:select-none w-full"
       style={{}}
     >
       <SidebarHeader
