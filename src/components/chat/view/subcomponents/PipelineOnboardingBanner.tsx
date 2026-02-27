@@ -114,7 +114,7 @@ export default function PipelineOnboardingBanner({
   const isNoBrief = pipelineState === 'no-brief';
 
   return (
-    <div className="w-full max-w-md mx-auto mt-4 mb-2">
+    <div className="w-full max-w-2xl mt-4 mb-2">
       <div className="relative rounded-xl border border-cyan-300/50 dark:border-cyan-700/50 bg-gradient-to-br from-cyan-50/80 via-sky-50/60 to-emerald-50/40 dark:from-cyan-950/30 dark:via-sky-950/20 dark:to-emerald-950/10 p-4 shadow-sm">
         <button
           onClick={() => setDismissed(true)}

@@ -133,7 +133,7 @@ export function useSidebarController({
       if (document.hasFocus()) {
         loadSortOrder();
       }
-    }, 1000);
+    }, 30000);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
@@ -316,27 +316,20 @@ export function useSidebarController({
     const { project, sessionCount } = deleteConfirmation;
     const isEmpty = sessionCount === 0;
 
+    // Optimistically remove from UI immediately to avoid flash
     setDeleteConfirmation(null);
-    setDeletingProjects((prev) => new Set([...prev, project.name]));
+    onProjectDelete?.(project.name);
 
     try {
       const response = await api.deleteProject(project.name, !isEmpty);
 
-      if (response.ok) {
-        onProjectDelete?.(project.name);
-      } else {
+      if (!response.ok) {
         const error = (await response.json()) as { error?: string };
         alert(error.error || t('messages.deleteProjectFailed'));
       }
     } catch (error) {
       console.error('Error deleting project:', error);
       alert(t('messages.deleteProjectError'));
-    } finally {
-      setDeletingProjects((prev) => {
-        const next = new Set(prev);
-        next.delete(project.name);
-        return next;
-      });
     }
   }, [deleteConfirmation, onProjectDelete, t]);
 

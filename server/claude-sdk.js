@@ -18,6 +18,8 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { CLAUDE_MODELS } from '../shared/modelConstants.js';
+import { ensureProjectSkillLinks } from './projects.js';
+import { writeProjectTemplates } from './templates/index.js';
 
 const activeSessions = new Map();
 const pendingToolApprovals = new Map();
@@ -495,6 +497,17 @@ async function queryClaudeSDK(command, options = {}, ws) {
   let tempDir = null;
 
   try {
+    // Ensure skills symlinks and CLAUDE.md template exist in the project directory
+    const projectDir = options.cwd || options.projectPath;
+    if (projectDir) {
+      try {
+        await ensureProjectSkillLinks(projectDir);
+        await writeProjectTemplates(projectDir);
+      } catch (err) {
+        console.warn('[claude-sdk] Failed to initialize project skills/templates:', err.message);
+      }
+    }
+
     // Map CLI options to SDK format
     const sdkOptions = mapCliOptionsToSDK(options);
 

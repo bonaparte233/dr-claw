@@ -347,74 +347,87 @@ export function useChatRealtimeHandlers({
         if (structuredMessageData && Array.isArray(structuredMessageData.content) && structuredMessageData.role === 'assistant') {
           const parentToolUseId = rawStructuredData?.parentToolUseId;
 
+          // Collect all new messages and updates in a single pass, then apply once
+          const newMessages: any[] = [];
+          const childToolUpdates: { parentId: string; child: any }[] = [];
+
           structuredMessageData.content.forEach((part: any) => {
             if (part.type === 'tool_use') {
               const toolInput = part.input ? JSON.stringify(part.input, null, 2) : '';
 
               // Check if this is a child tool from a subagent
               if (parentToolUseId) {
-                setChatMessages((previous) =>
-                  previous.map((message) => {
-                    if (message.toolId === parentToolUseId && message.isSubagentContainer) {
-                      const childTool = {
-                        toolId: part.id,
-                        toolName: part.name,
-                        toolInput: part.input,
-                        toolResult: null,
-                        timestamp: new Date(),
-                      };
-                      const existingChildren = message.subagentState?.childTools || [];
-                      return {
-                        ...message,
-                        subagentState: {
-                          childTools: [...existingChildren, childTool],
-                          currentToolIndex: existingChildren.length,
-                          isComplete: false,
-                        },
-                      };
-                    }
-                    return message;
-                  }),
-                );
+                childToolUpdates.push({
+                  parentId: parentToolUseId,
+                  child: {
+                    toolId: part.id,
+                    toolName: part.name,
+                    toolInput: part.input,
+                    toolResult: null,
+                    timestamp: new Date(),
+                  },
+                });
                 return;
               }
 
               // Check if this is a Task tool (subagent container)
               const isSubagentContainer = part.name === 'Task';
 
-              setChatMessages((previous) => [
-                ...previous,
-                {
-                  type: 'assistant',
-                  content: '',
-                  timestamp: new Date(),
-                  isToolUse: true,
-                  toolName: part.name,
-                  toolInput,
-                  toolId: part.id,
-                  toolResult: null,
-                  isSubagentContainer,
-                  subagentState: isSubagentContainer
-                    ? { childTools: [], currentToolIndex: -1, isComplete: false }
-                    : undefined,
-                },
-              ]);
+              newMessages.push({
+                type: 'assistant',
+                content: '',
+                timestamp: new Date(),
+                isToolUse: true,
+                toolName: part.name,
+                toolInput,
+                toolId: part.id,
+                toolResult: null,
+                isSubagentContainer,
+                subagentState: isSubagentContainer
+                  ? { childTools: [], currentToolIndex: -1, isComplete: false }
+                  : undefined,
+              });
               return;
             }
 
             if (part.type === 'text' && part.text?.trim()) {
               let content = decodeHtmlEntities(part.text);
               content = formatUsageLimitText(content);
-              setChatMessages((previous) => [
-                ...previous,
-                {
-                  type: 'assistant',
-                  content,
-                  timestamp: new Date(),
-                },
-              ]);
+              newMessages.push({
+                type: 'assistant',
+                content,
+                timestamp: new Date(),
+              });
             }
           });
+
+          // Apply all updates in a single setChatMessages call
+          if (newMessages.length > 0 || childToolUpdates.length > 0) {
+            setChatMessages((previous) => {
+              let updated = previous;
+              if (childToolUpdates.length > 0) {
+                updated = updated.map((message) => {
+                  if (!message.isSubagentContainer) return message;
+                  const updates = childToolUpdates.filter((u) => u.parentId === message.toolId);
+                  if (updates.length === 0) return message;
+                  const existingChildren = message.subagentState?.childTools || [];
+                  const newChildren = updates.map((u) => u.child);
+                  return {
+                    ...message,
+                    subagentState: {
+                      childTools: [...existingChildren, ...newChildren],
+                      currentToolIndex: existingChildren.length + newChildren.length - 1,
+                      isComplete: false,
+                    },
+                  };
+                });
+              }
+              if (newMessages.length > 0) {
+                updated = [...updated, ...newMessages];
+              }
+              return updated;
+            });
+          }
         } else if (structuredMessageData && structuredMessageData.role === 'assistant' && typeof structuredMessageData.content === 'string' && structuredMessageData.content.trim()) {
           let content = decodeHtmlEntities(structuredMessageData.content);
           content = formatUsageLimitText(content);
@@ -431,59 +444,63 @@ export function useChatRealtimeHandlers({
         if (structuredMessageData?.role === 'user' && Array.isArray(structuredMessageData.content)) {
           const parentToolUseId = rawStructuredData?.parentToolUseId;
 
-          structuredMessageData.content.forEach((part: any) => {
-            if (part.type !== 'tool_result') {
-              return;
-            }
+          // Collect all tool results, then apply in a single update
+          const toolResults = structuredMessageData.content.filter((part: any) => part.type === 'tool_result');
 
+          if (toolResults.length > 0) {
             setChatMessages((previous) =>
               previous.map((message) => {
-                // Handle child tool results (route to parent's subagentState)
-                if (parentToolUseId && message.toolId === parentToolUseId && message.isSubagentContainer) {
-                  return {
-                    ...message,
-                    subagentState: {
-                      ...message.subagentState!,
-                      childTools: message.subagentState!.childTools.map((child) => {
-                        if (child.toolId === part.tool_use_id) {
-                          return {
-                            ...child,
-                            toolResult: {
-                              content: part.content,
-                              isError: part.is_error,
-                              timestamp: new Date(),
-                            },
-                          };
-                        }
-                        return child;
-                      }),
-                    },
-                  };
-                }
-
-                // Handle normal tool results (including parent Task tool completion)
-                if (message.isToolUse && message.toolId === part.tool_use_id) {
-                  const result = {
-                    ...message,
-                    toolResult: {
-                      content: part.content,
-                      isError: part.is_error,
-                      timestamp: new Date(),
-                    },
-                  };
-                  // Mark subagent as complete when parent Task receives its result
-                  if (message.isSubagentContainer && message.subagentState) {
-                    result.subagentState = {
-                      ...message.subagentState,
-                      isComplete: true,
-                    };
+                for (const part of toolResults) {
+                  // Handle child tool results (route to parent's subagentState)
+                  if (parentToolUseId && message.toolId === parentToolUseId && message.isSubagentContainer) {
+                    const updatedChildren = message.subagentState!.childTools.map((child: any) => {
+                      if (child.toolId === part.tool_use_id) {
+                        return {
+                          ...child,
+                          toolResult: {
+                            content: part.content,
+                            isError: part.is_error,
+                            timestamp: new Date(),
+                          },
+                        };
+                      }
+                      return child;
+                    });
+                    if (updatedChildren !== message.subagentState!.childTools) {
+                      return {
+                        ...message,
+                        subagentState: {
+                          ...message.subagentState!,
+                          childTools: updatedChildren,
+                        },
+                      };
+                    }
                   }
-                  return result;
+
+                  // Handle normal tool results (including parent Task tool completion)
+                  if (message.isToolUse && message.toolId === part.tool_use_id) {
+                    const result = {
+                      ...message,
+                      toolResult: {
+                        content: part.content,
+                        isError: part.is_error,
+                        timestamp: new Date(),
+                      },
+                    };
+                    // Mark subagent as complete when parent Task receives its result
+                    if (message.isSubagentContainer && message.subagentState) {
+                      result.subagentState = {
+                        ...message.subagentState,
+                        isComplete: true,
+                      };
+                    }
+                    return result;
+                  }
                 }
                 return message;
               }),
             );
-          });
+          }
         }
         break;
       }

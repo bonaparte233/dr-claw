@@ -135,7 +135,7 @@ function Sidebar({
     if (creatingProject) return;
     setCreatingProject(true);
     try {
-      const fsResponse = await (api as any).browseFilesystem('~');
+      const fsResponse = await (api as any).browseFilesystem('~/vibelab');
       const fsData = await fsResponse.json();
       const homePath = fsData.path || '~/vibelab';
       const name = generateWorkspaceName();

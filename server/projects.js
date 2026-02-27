@@ -418,6 +418,7 @@ async function getProjects(progressCallback = null) {
   let totalProjects = 0;
   let processedProjects = 0;
   let directories = [];
+  let configDirty = false;
 
   try {
     // Check if the .claude/projects directory exists
@@ -573,11 +574,21 @@ async function getProjects(progressCallback = null) {
         }
       }
 
+      // Skip projects whose folder has been deleted from disk and clean up config
       let dirCreatedAt = null;
+      let folderExists = false;
       try {
         const dirStat = await fs.stat(actualProjectDir);
         dirCreatedAt = dirStat.birthtime.toISOString();
+        folderExists = true;
       } catch (_) {}
+
+      if (!folderExists) {
+        // Auto-remove stale project from config
+        delete config[projectName];
+        configDirty = true;
+        continue;
+      }
 
       const project = {
           name: projectName,
@@ -642,6 +653,11 @@ async function getProjects(progressCallback = null) {
 
       projects.push(project);
     }
+  }
+
+  // Persist config if stale projects were removed
+  if (configDirty) {
+    await saveProjectConfig(config);
   }
 
   // Emit completion after all projects (including manual) are processed
@@ -2185,5 +2201,6 @@ export {
   clearProjectDirectoryCache,
   getCodexSessions,
   getCodexSessionMessages,
-  deleteCodexSession
+  deleteCodexSession,
+  ensureProjectSkillLinks
 };

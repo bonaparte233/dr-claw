@@ -6,6 +6,7 @@ import { useTaskMaster } from '../../../contexts/TaskMasterContext';
 import { useTranslation } from 'react-i18next';
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
+import SkillShortcutsPanel from './subcomponents/SkillShortcutsPanel';
 import type { ChatInterfaceProps } from '../types/types';
 import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
@@ -357,6 +358,12 @@ function ChatInterface({
             onShowAllTasks={onShowAllTasks}
           />
         </div>
+
+        {chatMessages.length > 0 && (
+          <div className="px-4">
+            <SkillShortcutsPanel setInput={setInput} textareaRef={textareaRef} />
+          </div>
+        )}
 
         <ChatComposer
           pendingPermissionRequests={pendingPermissionRequests}

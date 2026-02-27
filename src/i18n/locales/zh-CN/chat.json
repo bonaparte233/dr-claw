@@ -231,6 +231,20 @@
       "collapse": "收起任务进度"
     }
   },
+  "skillShortcuts": {
+    "title": "技能快捷方式",
+    "useAll": "全部使用",
+    "categories": {
+      "deepResearch": "深度调研",
+      "ideation": "研究构思",
+      "experiment": "实验开发",
+      "paperWriting": "论文写作",
+      "paperReview": "论文审阅",
+      "grantWriting": "基金撰写"
+    },
+    "promptSingle": "请使用 {{skill}} 技能来帮助我完成这个任务。\n\n在此描述你的任务：",
+    "promptMulti": "请使用以下技能完成这个任务：{{skills}}。\n\n在此描述你的任务："
+  },
   "pipelineOnboarding": {
     "noBrief": {
       "title": "设置研究流水线",

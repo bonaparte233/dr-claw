@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import SessionProviderLogo from '../../../SessionProviderLogo';
 import NextTaskBanner from '../../../NextTaskBanner.jsx';
 import PipelineOnboardingBanner from './PipelineOnboardingBanner';
+import SkillShortcutsPanel from './SkillShortcutsPanel';
 import { CLAUDE_MODELS, CURSOR_MODELS, CODEX_MODELS } from '../../../../../shared/modelConstants';
 import type { ProjectSession, SessionProvider } from '../../../../types/app';
 
@@ -112,7 +113,8 @@ export default function ProviderSelectionEmptyState({
   if (!selectedSession && !currentSessionId) {
     return (
       <div className="flex items-center justify-center h-full px-4">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-2xl">
+          <div className="max-w-md mx-auto">
           {/* Heading */}
           <div className="text-center mb-8">
             <h2 className="text-lg sm:text-xl font-semibold text-foreground tracking-tight">
@@ -194,11 +196,13 @@ export default function ProviderSelectionEmptyState({
                     : t('providerSelection.readyPrompt.default')}
             </p>
           </div>
+          </div>
 
           {/* Pipeline onboarding or task banner */}
           {provider && (
             <div className="mt-5">
               <PipelineOnboardingBanner setInput={setInput} textareaRef={textareaRef} />
+              <SkillShortcutsPanel setInput={setInput} textareaRef={textareaRef} />
               {tasksEnabled && isTaskMasterInstalled && (
                 <NextTaskBanner
                   onStartTask={(prompt?: string) => setInput(prompt && prompt.trim() ? prompt : nextTaskPrompt)}
@@ -216,12 +220,15 @@ export default function ProviderSelectionEmptyState({
   if (selectedSession) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center px-6 max-w-md">
-          <p className="text-lg font-semibold text-foreground mb-1.5">{t('session.continue.title')}</p>
-          <p className="text-sm text-muted-foreground leading-relaxed">{t('session.continue.description')}</p>
+        <div className="text-center px-6 max-w-2xl">
+          <div className="max-w-md mx-auto">
+            <p className="text-lg font-semibold text-foreground mb-1.5">{t('session.continue.title')}</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">{t('session.continue.description')}</p>
+          </div>
 
           <div className="mt-5">
             <PipelineOnboardingBanner setInput={setInput} textareaRef={textareaRef} />
+            <SkillShortcutsPanel setInput={setInput} textareaRef={textareaRef} />
             {tasksEnabled && isTaskMasterInstalled && (
               <NextTaskBanner
                 onStartTask={(prompt?: string) => setInput(prompt && prompt.trim() ? prompt : nextTaskPrompt)}

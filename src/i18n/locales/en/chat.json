@@ -231,6 +231,20 @@
       "collapse": "Collapse task progress"
     }
   },
+  "skillShortcuts": {
+    "title": "Skill Shortcuts",
+    "useAll": "Use All",
+    "categories": {
+      "deepResearch": "Deep Research",
+      "ideation": "Research Ideation",
+      "experiment": "Experiment Dev",
+      "paperWriting": "Paper Writing",
+      "paperReview": "Paper Review",
+      "grantWriting": "Grant Writing"
+    },
+    "promptSingle": "Please use the {{skill}} skill to help me with this task.\n\nDescribe your task here:",
+    "promptMulti": "Please use the following skills for this task: {{skills}}.\n\nDescribe your research task here:"
+  },
   "pipelineOnboarding": {
     "noBrief": {
       "title": "Set Up Your Research Pipeline",

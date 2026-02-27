@@ -72,9 +72,9 @@ const ProjectCreationWizard = ({ onClose, onProjectCreated }) => {
     const autoFillPath = async () => {
       const suggestedName = generateWorkspaceName();
       try {
-        const response = await api.browseFilesystem('~');
+        const response = await api.browseFilesystem('~/vibelab');
         const data = await response.json();
-        const basePath = data.path || '~';
+        const basePath = data.path || '~/vibelab';
         const suggestedPath = appendPathSegment(basePath, suggestedName);
         setWorkspacePath((currentPath) => (currentPath.trim() ? currentPath : suggestedPath));
       } catch (error) {
@@ -188,7 +188,7 @@ const ProjectCreationWizard = ({ onClose, onProjectCreated }) => {
 
   const openFolderBrowser = async () => {
     setShowFolderBrowser(true);
-    await loadBrowserFolders('~');
+    await loadBrowserFolders('~/vibelab');
   };
 
   const loadBrowserFolders = async (path) => {

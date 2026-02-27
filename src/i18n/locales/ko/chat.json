@@ -231,6 +231,20 @@
       "collapse": "작업 진행률 접기"
     }
   },
+  "skillShortcuts": {
+    "title": "스킬 바로가기",
+    "useAll": "모두 사용",
+    "categories": {
+      "deepResearch": "심층 연구",
+      "ideation": "연구 아이디어",
+      "experiment": "실험 개발",
+      "paperWriting": "논문 작성",
+      "paperReview": "논문 심사",
+      "grantWriting": "연구비 작성"
+    },
+    "promptSingle": "이 작업을 위해 {{skill}} 스킬을 사용해 주세요.\n\n작업을 설명하세요:",
+    "promptMulti": "이 작업을 위해 다음 스킬을 사용해 주세요: {{skills}}.\n\n작업을 설명하세요:"
+  },
   "pipelineOnboarding": {
     "noBrief": {
       "title": "연구 파이프라인 설정",
