@@ -19,7 +19,7 @@ export function registerPlotRoutes(fastify) {
     await ensureDir(path.dirname(abs));
 
     const resolved = resolveLLMConfig(llmConfig);
-    if (!resolved.apiKey) {
+    if (!resolved.provider && !resolved.apiKey) {
       return { ok: false, error: 'LATEXLAB_LLM_API_KEY not set' };
     }
     const baseSystem = [

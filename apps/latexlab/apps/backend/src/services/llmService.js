@@ -58,6 +58,7 @@ class ProviderResponseCollector {
   constructor() {
     this.buffer = '';
     this.cursorFallback = '';
+    this.claudeResultFallback = '';
   }
 
   append(text) {
@@ -77,12 +78,20 @@ class ProviderResponseCollector {
       const data = payload.data || {};
       if (data.type === 'content_block_delta' && data.delta?.text) {
         this.append(data.delta.text);
+      } else if (data.type === 'assistant' && data.message?.content && Array.isArray(data.message.content)) {
+        data.message.content.forEach((part) => {
+          if (part?.type === 'text' && typeof part.text === 'string') {
+            this.append(part.text);
+          }
+        });
       } else if (data.type === 'assistant' && Array.isArray(data.content)) {
         data.content.forEach((part) => {
           if (part?.type === 'text' && typeof part.text === 'string') {
             this.append(part.text);
           }
         });
+      } else if (data.type === 'result' && typeof data.result === 'string') {
+        this.claudeResultFallback = data.result.trim();
       } else if (typeof data.content === 'string') {
         this.append(data.content);
       }
@@ -107,7 +116,7 @@ class ProviderResponseCollector {
   }
 
   getContent() {
-    return (this.buffer || this.cursorFallback || '').trim();
+    return (this.buffer || this.claudeResultFallback || this.cursorFallback || '').trim();
   }
 
   getSessionId() {

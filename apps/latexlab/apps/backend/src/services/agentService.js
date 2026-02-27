@@ -9,7 +9,7 @@ import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts
 import { safeJoin } from '../utils/pathUtils.js';
 import { listFilesRecursive } from '../utils/fsUtils.js';
 import { extractPathFromPatch } from '../utils/diffUtils.js';
-import { resolveLLMConfig, normalizeBaseURL, normalizeChatEndpoint } from './llmService.js';
+import { resolveLLMConfig, normalizeBaseURL, normalizeChatEndpoint, callOpenAICompatible } from './llmService.js';
 import { getProjectRoot } from './projectService.js';
 import { extractArxivId, fetchArxivEntry, buildArxivBibtex } from './arxivService.js';
 import { t } from '../i18n/index.js';
@@ -148,6 +148,53 @@ export async function runToolAgent({
   });
 
   const resolved = resolveLLMConfig(llmConfig);
+
+  // VibeLab providers (claude/cursor/codex) use their own SDKs, not OpenAI-compatible,
+  // so they can't be used with LangChain's tool agent. Fall back to direct LLM call.
+  if (resolved.provider) {
+    let fileContent = '';
+    if (activePath) {
+      try {
+        const abs = safeJoin(projectRoot, activePath);
+        fileContent = await fs.readFile(abs, 'utf8');
+      } catch { /* file may not exist yet */ }
+    }
+
+    const system = [
+      'You are a LaTeX paper assistant for LatexLab.',
+      'Help the user with their LaTeX editing task.',
+      'If the user wants code changes, provide the complete updated content.',
+      'Be concise. Provide a short summary in the response.'
+    ].join(' ');
+
+    const userInput = [
+      `Task: ${task || 'polish'}`,
+      activePath ? `Active file: ${activePath}` : '',
+      fileContent ? `File content:\n${fileContent}` : '',
+      prompt ? `User prompt: ${prompt}` : '',
+      selection ? `Selection:\n${selection}` : '',
+      compileLog ? `Compile log:\n${compileLog}` : ''
+    ].filter(Boolean).join('\n\n');
+
+    const result = await callOpenAICompatible({
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: userInput }
+      ],
+      model: resolved.model,
+      provider: resolved.provider,
+      endpoint: resolved.endpoint,
+      apiKey: resolved.apiKey,
+      cwd: projectRoot
+    });
+
+    if (!result.ok) {
+      return { ok: false, reply: result.error || 'LLM call failed', patches: [] };
+    }
+    return { ok: true, reply: result.content || '', patches: [] };
+  }
+
+  // Non-VibeLab providers require an API key for OpenAI-compatible LangChain agent
   if (!resolved.apiKey) {
     return { ok: false, reply: 'LATEXLAB_LLM_API_KEY not set', patches: [] };
   }

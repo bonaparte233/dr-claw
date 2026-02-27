@@ -3571,6 +3571,7 @@ export default function EditorPage({
       }
     }
     const userMsg: Message = { role: 'user', content: prompt || t('(empty)') };
+    setPrompt('');
     const setHistory = isChat ? setChatMessages : setAgentMessages;
     const history = isChat ? chatMessages : agentMessages;
     const nextHistory = [...history, userMsg];
@@ -3803,6 +3804,11 @@ export default function EditorPage({
           <div className="brand-sub">{projectName || t('Editor Workspace')}</div>
         </div>
         <div className="toolbar">
+          {status && <div className="toolbar-status">{status}</div>}
+          <div className={`save-indicator ${isSaving ? 'saving' : isDirty ? 'dirty' : 'saved'} ${savePulse ? 'pulse' : ''}`}>
+            <span className="dot" />
+            <span>{isSaving ? t('保存中...') : isDirty ? t('未保存') : t('已保存')}</span>
+          </div>
           {showBackToVibeLab && (
             <button className="btn ghost" onClick={handleBackToVibeLab}>{t('Back to VibeLab')}</button>
           )}
@@ -3838,18 +3844,13 @@ export default function EditorPage({
         </div>
       </header>
 
-      <div className="status-bar">
-        <div className="status-left">
-          <div>{status}</div>
-          <div className={`save-indicator ${isSaving ? 'saving' : isDirty ? 'dirty' : 'saved'} ${savePulse ? 'pulse' : ''}`}>
-            <span className="dot" />
-            <span>{isSaving ? t('保存中...') : isDirty ? t('未保存') : t('已保存')}</span>
+      {compileErrors.length > 0 && (
+        <div className="status-bar">
+          <div className="status-left">
+            {t('Compile')}: {compileEngine} · {t('Engine')}: {engineName || t('未初始化')} · {compileErrors.length} {t('error(s)')}
           </div>
         </div>
-        <div className="status-right">
-          {t('Compile')}: {compileEngine} · {t('Engine')}: {engineName || t('未初始化')}
-        </div>
-      </div>
+      )}
 
       <main
         className="workspace"
