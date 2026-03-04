@@ -254,6 +254,50 @@
     "promptSingle": "이 작업을 위해 {{skill}} 스킬을 사용해 주세요.\n\n작업을 설명하세요:",
     "promptMulti": "이 작업을 위해 다음 스킬을 사용해 주세요: {{skills}}.\n\n작업을 설명하세요:"
   },
+  "guidedStarter": {
+    "title": "지금 무엇을 하고 싶나요?",
+    "description": "먼저 연구 작업 유형을 고르고, 스킬을 선택하면 구조화된 프롬프트 템플릿이 자동으로 채워집니다.",
+    "refresh": "랜덤 변경",
+    "recommendedSkills": "이 옵션의 추천 스킬",
+    "loadingSkills": "사용 가능한 스킬을 확인하는 중...",
+    "noAvailableSkills": "현재 환경에서 이 옵션과 일치하는 설치된 스킬이 없습니다.",
+    "noAvailableSkillsFallback": "설치된 일치 항목이 없어 이 옵션의 기본 추천 스킬을 표시합니다.",
+    "useAllSkills": "모든 스킬 사용",
+    "template": {
+      "intro": "\"{{scenario}}\" 작업을 도와주세요. 필요 시 다음 스킬을 사용해 주세요: {{skills}}.",
+      "background": "연구 배경:",
+      "goal": "목표 및 기대 산출물:",
+      "inputs": "현재 보유한 데이터/코드/리소스:",
+      "constraints": "제약 조건(시간/컴퓨팅/학회 등):",
+      "output": "단계별 실행 계획을 먼저 제시하고, 첫 번째 실행 가능한 작업부터 시작해 주세요."
+    },
+    "scenarios": {
+      "paperReproduction": {
+        "title": "논문을 재현하고 싶어요",
+        "description": "논문 핵심 구현 요소를 파악하고 재현 가능한 실행 계획을 세웁니다."
+      },
+      "literatureSurvey": {
+        "title": "문헌 조사를 하고 싶어요",
+        "description": "최신 대표 논문을 수집하고 연구 흐름과 공백을 정리합니다."
+      },
+      "researchIdea": {
+        "title": "연구 아이디어를 구체화하고 싶어요",
+        "description": "막연한 방향을 가설, 기여점, 평가 기준으로 명확히 정리합니다."
+      },
+      "experimentPlan": {
+        "title": "실험 계획을 세우고 싶어요",
+        "description": "구현 전에 베이스라인, 지표, 소거 실험, 리스크를 설계합니다."
+      },
+      "paperWriting": {
+        "title": "논문 초안을 쓰고 싶어요",
+        "description": "섹션 구조를 잡고 주장 표현을 다듬어 타깃 학회 스타일에 맞춥니다."
+      },
+      "manuscriptReview": {
+        "title": "원고 리뷰를 받고 싶어요",
+        "description": "리뷰어 관점에서 방법, 근거, 인용, 문장 품질을 점검합니다."
+      }
+    }
+  },
   "pipelineOnboarding": {
     "noBrief": {
       "title": "연구 파이프라인 설정",

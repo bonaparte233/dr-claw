@@ -254,6 +254,50 @@
     "promptSingle": "请使用 {{skill}} 技能来帮助我完成这个任务。\n\n在此描述你的任务：",
     "promptMulti": "请使用以下技能完成这个任务：{{skills}}。\n\n在此描述你的任务："
   },
+  "guidedStarter": {
+    "title": "你现在想做什么？",
+    "description": "先选择一个研究任务方向，再选择技能，一键生成结构化提问模板。",
+    "refresh": "随机换一组",
+    "recommendedSkills": "该方向推荐 Skills",
+    "loadingSkills": "正在检测可用 Skills...",
+    "noAvailableSkills": "当前环境中暂无匹配的已安装 Skills。",
+    "noAvailableSkillsFallback": "未找到已安装匹配项，已回退显示该方向默认推荐 Skills。",
+    "useAllSkills": "使用全部 Skills",
+    "template": {
+      "intro": "请协助我完成“{{scenario}}”，并在需要时使用这些 Skills：{{skills}}。",
+      "background": "研究背景：",
+      "goal": "目标与预期产出：",
+      "inputs": "已有数据/代码/资源：",
+      "constraints": "约束条件（时间/算力/投稿等）：",
+      "output": "请先给出分步执行计划，并从第一个可落地任务开始。"
+    },
+    "scenarios": {
+      "paperReproduction": {
+        "title": "我想复现一篇论文",
+        "description": "先读懂论文与关键实现细节，再制定可执行的复现计划。"
+      },
+      "literatureSurvey": {
+        "title": "我想做文献调研",
+        "description": "收集近期代表工作，整理研究脉络并识别空白点。"
+      },
+      "researchIdea": {
+        "title": "我想打磨研究想法",
+        "description": "把模糊方向变成清晰假设、创新点和评估标准。"
+      },
+      "experimentPlan": {
+        "title": "我想制定实验方案",
+        "description": "在实现前设计基线、指标、消融实验与风险控制。"
+      },
+      "paperWriting": {
+        "title": "我想写论文初稿",
+        "description": "梳理章节结构、论点表达，并贴合目标会议写作风格。"
+      },
+      "manuscriptReview": {
+        "title": "我想审阅论文稿件",
+        "description": "以审稿视角检查方法、证据、引用与写作质量。"
+      }
+    }
+  },
   "pipelineOnboarding": {
     "noBrief": {
       "title": "设置研究流水线",

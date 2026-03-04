@@ -254,6 +254,50 @@
     "promptSingle": "Please use the {{skill}} skill to help me with this task.\n\nDescribe your task here:",
     "promptMulti": "Please use the following skills for this task: {{skills}}.\n\nDescribe your research task here:"
   },
+  "guidedStarter": {
+    "title": "What do you want to do today?",
+    "description": "Pick one research option first. Then choose a skill to auto-fill a structured prompt template.",
+    "refresh": "Randomize",
+    "recommendedSkills": "Recommended skills for this option",
+    "loadingSkills": "Checking available skills...",
+    "noAvailableSkills": "No matched installed skills for this option yet.",
+    "noAvailableSkillsFallback": "No installed match found, showing the default recommended skills for this option.",
+    "useAllSkills": "Use all skills",
+    "template": {
+      "intro": "Please help me with \"{{scenario}}\" and use these skills when needed: {{skills}}.",
+      "background": "Research background:",
+      "goal": "Goal and expected outcome:",
+      "inputs": "Current data/code/resources:",
+      "constraints": "Constraints (time/compute/venue/etc.):",
+      "output": "Please provide a step-by-step plan and start with the first actionable task."
+    },
+    "scenarios": {
+      "paperReproduction": {
+        "title": "I want to reproduce a paper",
+        "description": "Read the paper, identify key implementation details, and build a reproducibility plan."
+      },
+      "literatureSurvey": {
+        "title": "I want a literature survey",
+        "description": "Collect recent papers, summarize trends, and map open research gaps."
+      },
+      "researchIdea": {
+        "title": "I want to refine a research idea",
+        "description": "Turn a rough direction into clear hypotheses, novelty, and evaluation criteria."
+      },
+      "experimentPlan": {
+        "title": "I want an experiment plan",
+        "description": "Design baselines, metrics, ablations, and risk controls before implementation."
+      },
+      "paperWriting": {
+        "title": "I want to write a paper draft",
+        "description": "Structure sections, sharpen claims, and align writing with target venue expectations."
+      },
+      "manuscriptReview": {
+        "title": "I want manuscript review",
+        "description": "Run a reviewer-style check for methods, evidence, references, and writing quality."
+      }
+    }
+  },
   "pipelineOnboarding": {
     "noBrief": {
       "title": "Set Up Your Research Pipeline",

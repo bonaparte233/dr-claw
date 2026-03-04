@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useCallback, useMemo, useRef } from 'react';
-import type { RefObject } from 'react';
+import type { Dispatch, RefObject, SetStateAction } from 'react';
 
 import MessageComponent from './MessageComponent';
 import AgentTurnContainer from './AgentTurnContainer';
@@ -24,6 +24,7 @@ interface ChatMessagesPaneProps {
   provider: SessionProvider;
   setProvider: (provider: SessionProvider) => void;
   textareaRef: RefObject<HTMLTextAreaElement>;
+  setInput: Dispatch<SetStateAction<string>>;
   claudeModel: string;
   setClaudeModel: (model: string) => void;
   cursorModel: string;
@@ -65,6 +66,7 @@ export default function ChatMessagesPane({
   provider,
   setProvider,
   textareaRef,
+  setInput,
   claudeModel,
   setClaudeModel,
   cursorModel,
@@ -157,6 +159,8 @@ export default function ChatMessagesPane({
             setCursorModel={setCursorModel}
             codexModel={codexModel}
             setCodexModel={setCodexModel}
+            projectName={selectedProject.name}
+            setInput={setInput}
           />
           {intakeGreeting && (
             <div className="flex flex-col w-full mb-6 mt-4">
@@ -300,4 +304,3 @@ export default function ChatMessagesPane({
     </div>
   );
 }
-

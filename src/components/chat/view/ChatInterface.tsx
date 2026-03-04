@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
 import SkillShortcutsPanel from './subcomponents/SkillShortcutsPanel';
-import PipelineOnboardingBanner from './subcomponents/PipelineOnboardingBanner';
 import type { ChatInterfaceProps } from '../types/types';
 import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
@@ -348,6 +347,7 @@ function ChatInterface({
           provider={provider}
           setProvider={(nextProvider) => setProvider(nextProvider as Provider)}
           textareaRef={textareaRef}
+          setInput={setInput}
           claudeModel={claudeModel}
           setClaudeModel={setClaudeModel}
           cursorModel={cursorModel}
@@ -378,7 +378,6 @@ function ChatInterface({
         />
 
         <div className="px-2 sm:px-4 max-w-5xl mx-auto w-full">
-          <PipelineOnboardingBanner setInput={setInput} textareaRef={textareaRef} />
           <div className="flex gap-4">
             <div className="flex-1 min-w-0">
               <SkillShortcutsPanel setInput={setInput} textareaRef={textareaRef} />

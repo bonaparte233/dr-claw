@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import SessionProviderLogo from '../../../SessionProviderLogo';
 import { CLAUDE_MODELS, CURSOR_MODELS, CODEX_MODELS } from '../../../../../shared/modelConstants';
 import type { ProjectSession, SessionProvider } from '../../../../types/app';
+import GuidedPromptStarter from './GuidedPromptStarter';
 
 interface ProviderSelectionEmptyStateProps {
   selectedSession: ProjectSession | null;
@@ -17,6 +18,8 @@ interface ProviderSelectionEmptyStateProps {
   setCursorModel: (model: string) => void;
   codexModel: string;
   setCodexModel: (model: string) => void;
+  projectName: string;
+  setInput: React.Dispatch<React.SetStateAction<string>>;
 }
 
 type ProviderDef = {
@@ -80,6 +83,8 @@ export default function ProviderSelectionEmptyState({
   setCursorModel,
   codexModel,
   setCodexModel,
+  projectName,
+  setInput,
 }: ProviderSelectionEmptyStateProps) {
   const { t } = useTranslation('chat');
 
@@ -103,6 +108,7 @@ export default function ProviderSelectionEmptyState({
     return (
       <div className="flex items-center justify-center h-full px-4">
         <div className="w-full max-w-2xl">
+          <div className="max-w-2xl mx-auto">
           <div className="max-w-md mx-auto">
           {/* Heading */}
           <div className="text-center mb-8">
@@ -183,6 +189,13 @@ export default function ProviderSelectionEmptyState({
           </div>
           </div>
 
+          <GuidedPromptStarter
+            projectName={projectName}
+            setInput={setInput}
+            textareaRef={textareaRef}
+          />
+
+        </div>
         </div>
       </div>
     );
