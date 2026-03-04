@@ -357,8 +357,40 @@ function StageSection({ title, icon: Icon, badgeClass, expanded, onToggle, child
   );
 }
 
-function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat }) {
+function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, onTaskUpdated }) {
   const [openStages, setOpenStages] = useState({});
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editForm, setEditForm] = useState({ title: '', description: '' });
+  const [saving, setSaving] = useState(false);
+
+  const handleDoubleClick = useCallback((task) => {
+    setEditingTaskId(String(task.id));
+    setEditForm({ title: task.title || '', description: task.description || '' });
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    setEditingTaskId(null);
+    setEditForm({ title: '', description: '' });
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!editingTaskId || !projectName) return;
+    setSaving(true);
+    try {
+      await api.taskmaster.updateTask(
+        encodeURIComponent(projectName),
+        editingTaskId,
+        { title: editForm.title, description: editForm.description },
+      );
+      if (onTaskUpdated) onTaskUpdated();
+    } catch (e) {
+      console.error('Failed to update task:', e);
+    } finally {
+      setSaving(false);
+      setEditingTaskId(null);
+      setEditForm({ title: '', description: '' });
+    }
+  }, [editingTaskId, editForm, projectName, onTaskUpdated]);
 
   useEffect(() => {
     if (!Array.isArray(tasks) || tasks.length === 0) return;
@@ -507,16 +539,74 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat }) {
                         {stageTasks.map((task) => {
                           const statusMeta = TASK_STATUS_META[task.status] || TASK_STATUS_META.pending;
                           const isFirstPendingTask = task.status === 'pending' && String(task.id) === firstPendingTaskId;
+                          const isEditing = editingTaskId === String(task.id);
                           return (
-                            <div key={`${stage}-${task.id}`} className="px-3 py-2 border-b border-border last:border-b-0">
+                            <div
+                              key={`${stage}-${task.id}`}
+                              className={`px-3 py-2 border-b border-border last:border-b-0 ${!isEditing ? 'cursor-pointer hover:bg-muted/30' : ''}`}
+                              onDoubleClick={!isEditing ? () => handleDoubleClick(task) : undefined}
+                              title={!isEditing ? 'Double-click to edit' : undefined}
+                            >
                               <div className="flex items-start gap-2">
                                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground mt-0.5">#{task.id}</span>
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-foreground truncate">{task.title || 'Untitled Task'}</p>
-                                  {task.description && (
-                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>
+                                  {isEditing ? (
+                                    <div className="space-y-1.5">
+                                      <input
+                                        type="text"
+                                        className="w-full text-sm font-medium text-foreground bg-background border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                                        value={editForm.title}
+                                        onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') { e.preventDefault(); handleSave(); }
+                                          if (e.key === 'Escape') handleCancel();
+                                        }}
+                                        disabled={saving}
+                                        autoFocus
+                                        placeholder="Task title"
+                                      />
+                                      <textarea
+                                        className="w-full text-xs text-muted-foreground bg-background border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-cyan-500 resize-y min-h-[2.5rem]"
+                                        value={editForm.description}
+                                        onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSave(); }
+                                          if (e.key === 'Escape') handleCancel();
+                                        }}
+                                        disabled={saving}
+                                        rows={2}
+                                        placeholder="Task description"
+                                      />
+                                      <div className="flex items-center gap-1.5">
+                                        <Button
+                                          size="sm"
+                                          className="h-6 px-2 text-[10px]"
+                                          onClick={handleSave}
+                                          disabled={saving}
+                                        >
+                                          <Check className="w-3 h-3 mr-1" />
+                                          {saving ? 'Saving...' : 'Save'}
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-2 text-[10px]"
+                                          onClick={handleCancel}
+                                          disabled={saving}
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <p className="text-sm font-medium text-foreground truncate">{task.title || 'Untitled Task'}</p>
+                                      {task.description && (
+                                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>
+                                      )}
+                                    </>
                                   )}
-                                  {Array.isArray(task.suggestedSkills) && task.suggestedSkills.length > 0 && (
+                                  {!isEditing && Array.isArray(task.suggestedSkills) && task.suggestedSkills.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-1.5">
                                       {task.suggestedSkills.slice(0, 3).map((skill) => (
                                         <span key={`${task.id}-${skill}`} className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300">
@@ -526,31 +616,33 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat }) {
                                     </div>
                                   )}
                                 </div>
-                                <div className="flex flex-col items-end gap-1">
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusMeta.className}`}>{statusMeta.label}</span>
-                                  {isFirstPendingTask && onNavigateToChat && (
-                                    <div className="mt-0.5 inline-flex flex-col items-end gap-1">
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 animate-pulse">
-                                        Next
+                                {!isEditing && (
+                                  <div className="flex flex-col items-end gap-1">
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusMeta.className}`}>{statusMeta.label}</span>
+                                    {isFirstPendingTask && onNavigateToChat && (
+                                      <div className="mt-0.5 inline-flex flex-col items-end gap-1">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 animate-pulse">
+                                          Next
+                                        </span>
+                                        <Button
+                                          size="sm"
+                                          className="h-7 px-2.5 text-[11px] font-semibold text-white bg-gradient-to-r from-cyan-500 via-sky-500 to-emerald-500 hover:from-cyan-400 hover:via-sky-400 hover:to-emerald-400 shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_8px_18px_rgba(16,185,129,0.35)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_20px_rgba(34,211,238,0.35)] transition-all"
+                                          onClick={() => onNavigateToChat()}
+                                        >
+                                          <Sparkles className="w-3 h-3 mr-1.5" />
+                                          <MessageSquare className="w-3 h-3 mr-1" />
+                                          Go to Chat
+                                        </Button>
+                                      </div>
+                                    )}
+                                    {task.status === 'in-progress' && (
+                                      <span className="text-[10px] text-blue-600 dark:text-blue-300 inline-flex items-center gap-1">
+                                        <Clock3 className="w-3 h-3" />
+                                        Active
                                       </span>
-                                      <Button
-                                        size="sm"
-                                        className="h-7 px-2.5 text-[11px] font-semibold text-white bg-gradient-to-r from-cyan-500 via-sky-500 to-emerald-500 hover:from-cyan-400 hover:via-sky-400 hover:to-emerald-400 shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_8px_18px_rgba(16,185,129,0.35)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_20px_rgba(34,211,238,0.35)] transition-all"
-                                        onClick={() => onNavigateToChat()}
-                                      >
-                                        <Sparkles className="w-3 h-3 mr-1.5" />
-                                        <MessageSquare className="w-3 h-3 mr-1" />
-                                        Go to Chat
-                                      </Button>
-                                    </div>
-                                  )}
-                                  {task.status === 'in-progress' && (
-                                    <span className="text-[10px] text-blue-600 dark:text-blue-300 inline-flex items-center gap-1">
-                                      <Clock3 className="w-3 h-3" />
-                                      Active
-                                    </span>
-                                  )}
-                                </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -1241,6 +1333,8 @@ function ResearchLab({ selectedProject, onNavigateToChat }) {
                 tasks={tasks}
                 isLoading={tasksLoading}
                 onNavigateToChat={onNavigateToChat}
+                projectName={projectName}
+                onTaskUpdated={loadData}
               />
 
               {loading && !hasContent ? (
