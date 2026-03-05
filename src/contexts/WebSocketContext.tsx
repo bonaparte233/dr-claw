@@ -19,10 +19,18 @@ export const useWebSocket = () => {
   return context;
 };
 
-const buildWebSocketUrl = (_token: string | null) => {
+const buildWebSocketUrl = (token: string | null) => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  // Auth wall disabled — connect without token
-  return `${protocol}//${window.location.host}/ws`;
+
+  if (IS_PLATFORM) {
+    return `${protocol}//${window.location.host}/ws`;
+  }
+
+  if (!token) {
+    return null;
+  }
+
+  return `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
 };
 
 const useWebSocketProviderState = (): WebSocketContextType => {
