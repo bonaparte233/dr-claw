@@ -49,9 +49,11 @@
 - `version`：pipeline 版本号。
 - `mode`：模式标记（如 `"idea"`）。
 - `stages`：阶段对象，通常包含：
+  - `survey`
   - `ideation`
   - `experiment`
   - `publication`
+  - `promotion`
 
 每个阶段可定义：
 
@@ -61,15 +63,17 @@
 - `task_blueprints`：任务蓝图（按顺序生成任务）。
 - `recommended_skills`：建议技能列表。
 
-## 三阶段 Skills 映射表
+## 阶段 Skills 映射表
 
 当前后端使用的阶段技能映射（当任务没有显式 `recommended_skills` 时会作为兜底）：
 
 | 阶段 | 基础技能 | 按任务类型补充 |
 |---|---|---|
+| `survey` | `inno-deep-research`, `academic-researcher`, `dataset-discovery` | `exploration` -> `inno-deep-research`、`academic-researcher`、`dataset-discovery`，`analysis` -> `inno-deep-research`、`academic-researcher` |
 | `ideation` | `inno-idea-generation`, `inno-research-orchestrator`, `inno-prepare-resources` | `analysis` -> `inno-research-orchestrator`，`exploration` -> `inno-idea-generation`、`inno-code-survey` |
 | `experiment` | `inno-code-survey`, `inno-experiment-dev`, `inno-experiment-analysis` | `implementation` -> `inno-experiment-dev`，`analysis` -> `inno-experiment-analysis`，`exploration` -> `inno-code-survey` |
 | `publication` | `inno-paper-writing`, `inno-reference-audit`, `inno-rclone-to-overleaf` | `writing` -> `inno-paper-writing`，`analysis` -> `inno-reference-audit` |
+| `promotion` | `making-academic-presentations` | `scripting`/`rendering`/`narration`/`delivery` -> `making-academic-presentations` |
 
 每个任务推荐技能的合成优先级：
 

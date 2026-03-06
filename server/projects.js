@@ -70,7 +70,7 @@ import os from 'os';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VIBELAB_SKILLS_DIR = path.join(__dirname, '..', 'skills');
 const PROJECT_SKILL_FOLDERS = ['.claude', '.agents', '.cursor'];
-const PROJECT_PIPELINE_FOLDERS = ['Ideation', 'Experiment', 'Publication', 'Research'];
+const PROJECT_PIPELINE_FOLDERS = ['Survey', 'Ideation', 'Experiment', 'Publication'];
 
 function normalizeTaskStatus(status) {
     const raw = String(status || '').trim().toLowerCase();
@@ -1424,6 +1424,8 @@ async function ensureProjectSkillLinks(projectPath) {
     }
     // Create preset research subdirs so the workspace structure is ready to use.
     const presetSubdirs = [
+      'Survey/references',
+      'Survey/reports',
       'Ideation/ideas',
       'Ideation/references',
       'Experiment/code_references',
@@ -1432,8 +1434,7 @@ async function ensureProjectSkillLinks(projectPath) {
       'Experiment/analysis',
       'Publication/paper',
       'Publication/homepage',
-      'Publication/slide',
-      'Research'
+      'Publication/slide'
     ];
     for (const rel of presetSubdirs) {
       await fs.mkdir(path.join(projectPath, rel), { recursive: true });
@@ -1454,6 +1455,10 @@ async function ensureProjectSkillLinks(projectPath) {
       created_at: createdAt,
       instance: instancePath,
       category: '',
+      Survey: {
+        references: path.join(projectPath, 'Survey', 'references'),
+        reports: path.join(projectPath, 'Survey', 'reports')
+      },
       Ideation: {
         ideas: path.join(projectPath, 'Ideation', 'ideas'),
         references: path.join(projectPath, 'Ideation', 'references')

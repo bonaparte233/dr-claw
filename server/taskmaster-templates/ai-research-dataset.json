@@ -12,6 +12,12 @@
     { "key": "target_venue", "label": "Target Venue", "path": "meta.target_venue", "placeholder": "Optional venue" }
   ],
   "sectionFields": {
+    "survey": [
+      { "key": "literature_scope", "label": "Literature Scope", "path": "sections.survey.literature_scope", "placeholder": "Existing datasets, benchmarks, and related survey boundary" },
+      { "key": "key_references", "label": "Key References", "path": "sections.survey.key_references", "type": "array", "placeholder": "One dataset or paper per line" },
+      { "key": "synthesis_summary", "label": "Synthesis Summary", "path": "sections.survey.synthesis_summary", "placeholder": "What existing resources cover well vs poorly" },
+      { "key": "open_gaps", "label": "Open Gaps", "path": "sections.survey.open_gaps", "type": "array", "placeholder": "One unmet need or benchmark gap per line" }
+    ],
     "ideation": [
       { "key": "research_goal", "label": "Research Goal", "path": "sections.ideation.research_goal", "placeholder": "What bottleneck does this dataset solve?" },
       { "key": "problem_framing", "label": "Problem Framing", "path": "sections.ideation.problem_framing", "placeholder": "Define scope, users, and boundaries" },
@@ -35,6 +41,40 @@
     "version": "1.1",
     "mode": "idea",
     "stages": {
+      "survey": {
+        "required_elements": [
+          "sections.survey.literature_scope",
+          "sections.survey.synthesis_summary"
+        ],
+        "optional_elements": [
+          "sections.survey.key_references",
+          "sections.survey.open_gaps"
+        ],
+        "quality_gate": [
+          "Existing datasets and benchmarks are mapped with explicit scope boundaries",
+          "Open gaps justify why a new dataset or benchmark is needed"
+        ],
+        "task_blueprints": [
+          {
+            "id": "dataset_prior_resource_survey",
+            "title": "Survey prior datasets, benchmarks, and data cards",
+            "description": "Collect the main related datasets and benchmark suites, then compare scope and governance tradeoffs.",
+            "taskType": "exploration",
+            "recommended_skills": ["inno-deep-research", "academic-researcher"]
+          },
+          {
+            "id": "dataset_gap_and_positioning",
+            "title": "Synthesize dataset gaps and positioning",
+            "description": "Explain which data coverage, quality, or evaluation gaps remain unsolved and how this project positions itself.",
+            "taskType": "analysis",
+            "recommended_skills": ["inno-deep-research", "academic-researcher"]
+          }
+        ],
+        "recommended_skills": [
+          "inno-deep-research",
+          "academic-researcher"
+        ]
+      },
       "ideation": {
         "required_elements": [
           "sections.ideation.research_goal",

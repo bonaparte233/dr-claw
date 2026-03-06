@@ -33,7 +33,8 @@ Create when missing:
   - Use `"plan"` when user provides concrete method/architecture/training plan.
   - Use `"idea"` otherwise.
 - Set `pipeline.startStage`:
-  - Use `"ideation"` (default) when user is starting from scratch.
+  - Use `"survey"` (default) when user is starting from scratch or needs literature review first.
+  - Use `"ideation"` when the user already has enough literature context and needs to shape a direction.
   - Use `"experiment"` when user already has a research idea, problem framing, and success criteria.
   - Use `"publication"` when user already has experimental results and analysis.
 - Make `task_blueprints` and `quality_gate` domain-specific to the topic.
@@ -41,7 +42,7 @@ Create when missing:
 
 ## Task generation rules
 
-Stage order: `ideation` < `experiment` < `publication`.
+Stage order: `survey` < `ideation` < `experiment` < `publication` < `promotion`.
 
 1. **Only generate tasks for stages >= `pipeline.startStage`**. Skip earlier stages entirely during task generation.
 2. Create tasks from each active stage's `task_blueprints`.

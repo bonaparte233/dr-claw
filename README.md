@@ -29,7 +29,7 @@ VibeLab is a general-purpose AI research assistant designed to help researchers 
 
 ## Highlights
 
-- **🔬 Research Lab** — Structured dashboard for end-to-end research: define your brief, generate a pipeline of tasks, track progress across Ideation → Experiment → Publication, and inspect source papers, ideas (rendered with LaTeX math), and cache artifacts — all at a glance
+- **🔬 Research Lab** — Structured dashboard for end-to-end research: define your brief, generate a pipeline of tasks, track progress across Survey → Ideation → Experiment → Publication → Promotion, and inspect source papers, ideas (rendered with LaTeX math), and cache artifacts — all at a glance
 - **📚 100+ Research Skills** — A curated library spanning idea generation, code survey, experiment development & analysis, paper writing, review response, and delivery — automatically discovered by agents and applied as task-level assistance
 - **🗂️ Chat-Driven Pipeline** — Describe your research idea in Chat; the agent uses the `inno-pipeline-planner` skill to interactively generate a structured research brief and task list — no manual templates needed
 - **🤖 Multi-Agent Backend** — Seamlessly switch between Claude Code as your execution engine; compatible with Claude Sonnet 4.5, Opus 4.5
@@ -130,7 +130,7 @@ When you first open VibeLab you will see the **Projects** sidebar. You have two 
 
 - **Open an existing project** — VibeLab auto-discovers projects from Claude Code sessions. Click any listed project to open it.
 <!-- VibeLab also supports Cursor and Codex sessions. -->
-- **Create a new project** — Click the **"+"** button, choose a directory on your machine, and VibeLab will set up the workspace: `.claude/`, `.agents/`, `.cursor/` (with `skills/` symlinked from the app), preset dirs (`Ideation/ideas`, `Ideation/references`, `Experiment/code_references`, `Experiment/datasets`, `Experiment/core_code`, `Experiment/analysis`, `Publication/paper`, `Publication/homepage`, `Publication/slide`), and **instance.json** at the project root with absolute paths for those directories.
+- **Create a new project** — Click the **"+"** button, choose a directory on your machine, and VibeLab will set up the workspace: `.claude/`, `.agents/`, `.cursor/` (with `skills/` symlinked from the app), preset dirs (`Survey/references`, `Survey/reports`, `Ideation/ideas`, `Ideation/references`, `Experiment/code_references`, `Experiment/datasets`, `Experiment/core_code`, `Experiment/analysis`, `Publication/paper`, `Publication/homepage`, `Publication/slide`), and **instance.json** at the project root with absolute paths for those directories.
 
 > **Default project storage path:** New projects are stored under `~/vibelab` by default. You can change this in **Settings → Appearance → Default Project Path**, or set the `WORKSPACES_ROOT` environment variable. The setting is persisted in `~/.claude/project-config.json`.
 

@@ -1,4 +1,24 @@
 {
+  "survey": {
+    "base": [
+      "inno-deep-research",
+      "academic-researcher",
+      "dataset-discovery",
+      "biorxiv-database"
+    ],
+    "byTaskType": {
+      "analysis": [
+        "inno-deep-research",
+        "academic-researcher"
+      ],
+      "exploration": [
+        "inno-deep-research",
+        "dataset-discovery",
+        "biorxiv-database",
+        "academic-researcher"
+      ]
+    }
+  },
   "ideation": {
     "base": [
       "inno-research-orchestrator",

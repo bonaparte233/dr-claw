@@ -93,6 +93,11 @@ function classifyArtifact(name, relativePath) {
   const rp = (relativePath || '').replace(/\\/g, '/');
 
   // ---- Directory-based classification (new layout) ----
+  if (rp.startsWith('Survey/') || rp.startsWith('Research/')) {
+    if (rp.includes('/references/')) return { stage: 'Literature Survey', icon: BookOpen, color: 'sky' };
+    if (rp.includes('/reports/')) return { stage: 'Gap Analysis', icon: BookOpen, color: 'sky' };
+    return { stage: 'Literature Survey', icon: BookOpen, color: 'sky' };
+  }
   if (rp.startsWith('Ideation/references/')) {
     if (name === 'load_instance.json') return { stage: 'Data Loading', icon: FolderOpen, color: 'blue' };
     if (name === 'github_search.json') return { stage: 'Data Loading', icon: FolderOpen, color: 'blue' };
@@ -161,10 +166,13 @@ function classifyArtifact(name, relativePath) {
   if (name.startsWith('machine_learning')) return { stage: 'ML Development', icon: Beaker, color: 'orange' };
   if (name.startsWith('judge_agent')) return { stage: 'Judge', icon: AlertCircle, color: 'yellow' };
   if (name.startsWith('experiment_analysis')) return { stage: 'Experiment Analysis', icon: Beaker, color: 'teal' };
+  if (relativePath?.startsWith('Research/') || relativePath?.startsWith('Survey/'))
+    return { stage: 'Literature Survey', icon: BookOpen, color: 'sky' };
   return { stage: 'Other', icon: FileText, color: 'gray' };
 }
 
 const BADGE_COLORS = {
+  sky: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
   blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
   rose: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
@@ -201,8 +209,9 @@ const PUBLICATION_STAGES = new Set(['Paper Writing']);
 const PRESENTATION_STAGES = new Set(['Homepage Delivery', 'Slide Generation', 'TTS Audio', 'Video Assembly']);
 const DEFAULT_RESEARCH_BRIEF_FILENAME = 'research_brief.json';
 const DEFAULT_TASKS_FILENAME = 'tasks.json';
-const TASK_STAGE_ORDER = ['ideation', 'experiment', 'publication', 'promotion', 'unassigned'];
+const TASK_STAGE_ORDER = ['survey', 'ideation', 'experiment', 'publication', 'promotion', 'unassigned'];
 const TASK_STAGE_META = {
+  survey: { label: 'Survey', className: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300' },
   ideation: { label: 'Ideation', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
   experiment: { label: 'Experiment', className: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' },
   publication: { label: 'Publication', className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
@@ -422,7 +431,7 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, on
     if (!Array.isArray(tasks) || tasks.length === 0) return;
     setOpenStages((prev) => {
       if (Object.keys(prev).length > 0) return prev;
-      return { ideation: true, experiment: true, publication: true, promotion: true, unassigned: false };
+      return { survey: true, ideation: true, experiment: true, publication: true, promotion: true, unassigned: false };
     });
   }, [tasks]);
 
@@ -431,6 +440,8 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, on
       ...task,
       stage: task?.stage === 'presentation'
         ? 'promotion'
+        : task?.stage === 'research'
+          ? 'survey'
         : (TASK_STAGE_META[task?.stage] ? task.stage : 'unassigned'),
       status: TASK_STATUS_META[task?.status] ? task.status : 'pending',
     })),
@@ -448,6 +459,7 @@ function TaskPipelineBoard({ tasks, isLoading, onNavigateToChat, projectName, on
 
   const groupedTasks = useMemo(() => {
     const groups = {
+      survey: [],
       ideation: [],
       experiment: [],
       publication: [],
@@ -724,6 +736,7 @@ function ArtifactsCard({ artifacts, onSelect, selectedPath }) {
     groups[info.stage].files.push(a);
   }
   const stageOrder = [
+    'Literature Survey', 'Gap Analysis',
     'Data Loading', 'Prepare', 'Idea Generation', 'Medical Expert', 'Engineering Expert',
     'Repo Acquisition', 'Code Survey', 'Implementation Plan',
     'ML Development', 'Judge', 'Experiment Analysis', 'Paper Writing',
@@ -1302,6 +1315,8 @@ function ResearchLab({ selectedProject, onNavigateToChat }) {
         // Normalize for UI: support both new schema (Ideation.*, Experiment.*, instance) and old (*_path, task_level)
         const ideasPath = merged?.Ideation?.ideas ?? merged?.ideas_path;
         const referencesPath = merged?.Ideation?.references ?? merged?.references_path;
+        const surveyReferencesPath = merged?.Survey?.references ?? merged?.survey_references_path;
+        const surveyReportsPath = merged?.Survey?.reports ?? merged?.survey_reports_path ?? merged?.Research;
         const conf = merged
           ? {
               ...merged,
@@ -1311,21 +1326,26 @@ function ResearchLab({ selectedProject, onNavigateToChat }) {
               cache_path: merged.cache_path,
               ideas_path: ideasPath,
               references_path: referencesPath,
+              survey_references_path: surveyReferencesPath,
+              survey_reports_path: surveyReportsPath,
               ideas_path_relative: toRelativePath(ideasPath, projectRoot) || 'Ideation/ideas',
               references_path_relative: toRelativePath(referencesPath, projectRoot) || 'Ideation/references',
+              survey_references_path_relative: toRelativePath(surveyReferencesPath, projectRoot) || (surveyReferencesPath ? 'Survey/references' : undefined),
+              survey_reports_path_relative: toRelativePath(surveyReportsPath, projectRoot) || (surveyReportsPath ? 'Survey/reports' : undefined),
             }
           : null;
         setConfig(conf);
       }
 
       const logFiles = collectFiles(tree, projectRoot, (rel) => {
+        if (/^(Survey|Research)\//.test(rel)) return true;
         // Promotion: collect all files under Promotion/ and legacy Presentation/.
         if (/^(Promotion|Presentation)\//.test(rel)) return true;
         // Legacy publication outputs that now belong to Promotion.
         if (/^Publication\/(homepage|slide)\//.test(rel)) return true;
         if (!rel.endsWith('.json')) return false;
-        // New layout: JSON files inside logs/ dirs under Ideation/ or Experiment/
-        if (/^(Ideation|Experiment)\/.*\/logs\//.test(rel)) return true;
+        // New layout: JSON files inside logs/ dirs under Survey/, Ideation/, or Experiment/
+        if (/^(Survey|Ideation|Experiment)\/.*\/logs\//.test(rel)) return true;
         // Publication: any JSON files under Publication/
         if (/^Publication\//.test(rel)) return true;
         // Legacy layout: JSON files inside cache/ directories
@@ -1416,7 +1436,7 @@ function ResearchLab({ selectedProject, onNavigateToChat }) {
                       <span className="text-xs text-muted-foreground">{artifacts.length} files</span>
                     </div>
                     <p className="text-xs text-muted-foreground mb-3">
-                      Browse artifacts generated across Ideation, Experiment, and Publication stages.
+                      Browse artifacts generated across Survey, Ideation, Experiment, Publication, and Promotion stages.
                     </p>
                     {artifacts.length > 0 ? (
                       <ArtifactsCard

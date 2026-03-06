@@ -23,8 +23,9 @@ const LEGACY_TASKMASTER_DIR = '.taskmaster';
 const DEFAULT_TASKS_TAG = 'master';
 const DEFAULT_RESEARCH_BRIEF_FILENAME = 'research_brief.json';
 const DEFAULT_MAX_TASKS = 30;
-const STAGE_ORDER = ['ideation', 'experiment', 'publication', 'promotion'];
+const STAGE_ORDER = ['survey', 'ideation', 'experiment', 'publication', 'promotion'];
 const STAGE_LABELS = {
+    survey: 'Survey',
     ideation: 'Ideation',
     experiment: 'Experiment',
     publication: 'Publication',
@@ -32,12 +33,20 @@ const STAGE_LABELS = {
     presentation: 'Promotion',
 };
 const STAGE_PROMPT_HINTS = {
+    survey: 'Establish the literature baseline, collect evidence, and map open gaps before committing to a direction.',
     ideation: 'Clarify thesis, scope boundaries, and evidence framing before execution.',
     experiment: 'Turn assumptions into an executable protocol with measurable validation criteria.',
     publication: 'Convert outcomes into a coherent manuscript narrative with concrete submission artifacts.',
     promotion: 'Transform research outcomes into homepage assets, visual slides, narration scripts, and demo videos.',
 };
 const DEFAULT_STAGE_SKILL_MAP = {
+    survey: {
+        base: ['inno-deep-research', 'academic-researcher', 'dataset-discovery'],
+        byTaskType: {
+            exploration: ['inno-deep-research', 'academic-researcher', 'dataset-discovery'],
+            analysis: ['inno-deep-research', 'academic-researcher'],
+        },
+    },
     ideation: {
         base: ['inno-idea-generation', 'inno-research-orchestrator', 'inno-prepare-resources'],
         byTaskType: {
@@ -71,6 +80,12 @@ const DEFAULT_STAGE_SKILL_MAP = {
     },
 };
 const DEFAULT_BRIEF_SECTIONS = {
+    survey: {
+        literature_scope: '',
+        key_references: [],
+        synthesis_summary: '',
+        open_gaps: [],
+    },
     ideation: {
         research_goal: '',
         problem_framing: '',
@@ -156,6 +171,35 @@ function buildDefaultBriefPipeline(stageSkillMap) {
         version: '1.1',
         mode: 'idea',
         stages: {
+            survey: {
+                required_elements: [
+                    'sections.survey.literature_scope',
+                    'sections.survey.synthesis_summary',
+                ],
+                optional_elements: [
+                    'sections.survey.key_references',
+                    'sections.survey.open_gaps',
+                ],
+                quality_gate: [
+                    'The literature scope is explicit and bounded',
+                    'The synthesis identifies concrete open gaps or unresolved tensions',
+                ],
+                task_blueprints: [
+                    {
+                        id: 'survey_collect_references',
+                        title: 'Collect and triage the core literature set',
+                        description: 'Assemble the most relevant references, group them by theme, and note inclusion boundaries.',
+                        taskType: 'exploration',
+                    },
+                    {
+                        id: 'survey_summarize_gaps',
+                        title: 'Summarize trends, baselines, and open gaps',
+                        description: 'Write a compact synthesis of what is known, what is contested, and where the project can contribute.',
+                        taskType: 'analysis',
+                    },
+                ],
+                recommended_skills: map.survey.base,
+            },
             ideation: {
                 required_elements: [
                     'sections.ideation.research_goal',
@@ -473,6 +517,7 @@ function buildFallbackTaskCandidates(briefData = {}) {
     const title = String(briefData?.meta?.title || '').trim();
     const target = title ? ` for "${title}"` : '';
     return [
+        `Finalize Survey section${target}: define literature scope, summarize prior work, and record open gaps.`,
         `Finalize Ideation section${target}: clarify research goal, framing, and evidence plan.`,
         `Define Experiment section${target}: specify validation goal, protocol, and evaluation plan.`,
         `Prepare Publication section${target}: draft paper outline, figures/tables plan, and submission checklist.`,
@@ -484,6 +529,8 @@ function buildPipelineSkeletonCandidates(briefData = {}) {
     const title = String(briefData?.meta?.title || '').trim();
     const target = title ? ` (${title})` : '';
     return [
+        `Survey: define literature scope and search boundary${target}.`,
+        `Survey: synthesize key baselines, trends, and open gaps${target}.`,
         `Ideation: clarify problem framing and research goal${target}.`,
         `Ideation: collect key evidence and references${target}.`,
         `Ideation: define measurable success criteria${target}.`,
@@ -548,7 +595,8 @@ function inferStageFromCandidate(text = '') {
 function normalizeStageName(stage) {
     const value = String(stage || '').trim().toLowerCase();
     if (value === 'presentation') return 'promotion';
-    if (value === 'ideation' || value === 'experiment' || value === 'publication' || value === 'promotion') {
+    if (value === 'research') return 'survey';
+    if (value === 'survey' || value === 'ideation' || value === 'experiment' || value === 'publication' || value === 'promotion') {
         return value;
     }
     return null;
@@ -713,7 +761,7 @@ function instantiatePipelineTasksFromBrief(briefData = {}, numTasks = DEFAULT_MA
     const maxTasks = Number.isFinite(Number(numTasks)) && Number(numTasks) > 0 ? Number(numTasks) : DEFAULT_MAX_TASKS;
 
     // Respect pipeline.startStage — only generate tasks for stages >= startStage
-    const startStage = normalizeStageName(briefData?.pipeline?.startStage) || 'ideation';
+    const startStage = normalizeStageName(briefData?.pipeline?.startStage) || 'survey';
     const startIdx = STAGE_ORDER.indexOf(startStage);
     const activeStages = startIdx > 0 ? STAGE_ORDER.slice(startIdx) : STAGE_ORDER;
 

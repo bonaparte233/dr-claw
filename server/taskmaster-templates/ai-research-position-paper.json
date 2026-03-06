@@ -12,6 +12,12 @@
     { "key": "target_venue", "label": "Target Venue", "path": "meta.target_venue", "placeholder": "Optional venue" }
   ],
   "sectionFields": {
+    "survey": [
+      { "key": "literature_scope", "label": "Literature Scope", "path": "sections.survey.literature_scope", "placeholder": "Communities, debates, and time window to cover" },
+      { "key": "key_references", "label": "Key References", "path": "sections.survey.key_references", "type": "array", "placeholder": "One foundational or contradictory source per line" },
+      { "key": "synthesis_summary", "label": "Synthesis Summary", "path": "sections.survey.synthesis_summary", "placeholder": "What positions exist, where they agree, and where they clash" },
+      { "key": "open_gaps", "label": "Open Gaps", "path": "sections.survey.open_gaps", "type": "array", "placeholder": "One unresolved debate or synthesis gap per line" }
+    ],
     "ideation": [
       { "key": "research_goal", "label": "Core Thesis", "path": "sections.ideation.research_goal", "placeholder": "State your central claim" },
       { "key": "problem_framing", "label": "Problem Framing", "path": "sections.ideation.problem_framing", "placeholder": "Why now and for whom" },
@@ -35,6 +41,40 @@
     "version": "1.1",
     "mode": "idea",
     "stages": {
+      "survey": {
+        "required_elements": [
+          "sections.survey.literature_scope",
+          "sections.survey.synthesis_summary"
+        ],
+        "optional_elements": [
+          "sections.survey.key_references",
+          "sections.survey.open_gaps"
+        ],
+        "quality_gate": [
+          "The surveyed debate space is explicit and balanced",
+          "Contradictions and synthesis gaps are documented clearly"
+        ],
+        "task_blueprints": [
+          {
+            "id": "position_debate_landscape",
+            "title": "Map the debate landscape and canonical positions",
+            "description": "Survey major viewpoints, representative sources, and the assumptions behind each position.",
+            "taskType": "exploration",
+            "recommended_skills": ["inno-deep-research", "academic-researcher"]
+          },
+          {
+            "id": "position_tension_synthesis",
+            "title": "Synthesize unresolved tensions and framing gaps",
+            "description": "Summarize where the literature disagrees and what conceptual gap the position paper should address.",
+            "taskType": "analysis",
+            "recommended_skills": ["inno-deep-research", "academic-researcher"]
+          }
+        ],
+        "recommended_skills": [
+          "inno-deep-research",
+          "academic-researcher"
+        ]
+      },
       "ideation": {
         "required_elements": [
           "sections.ideation.research_goal",

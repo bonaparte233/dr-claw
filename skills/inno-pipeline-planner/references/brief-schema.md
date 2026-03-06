@@ -13,6 +13,12 @@ Canonical contract for `.pipeline/docs/research_brief.json`.
     "date": "<YYYY-MM-DD>"
   },
   "sections": {
+    "survey": {
+      "literature_scope": "<string>",
+      "key_references": ["<string>"],
+      "synthesis_summary": "<string>",
+      "open_gaps": ["<string>"]
+    },
     "ideation": {
       "research_goal": "<string>",
       "problem_framing": "<string>",
@@ -35,8 +41,39 @@ Canonical contract for `.pipeline/docs/research_brief.json`.
   "pipeline": {
     "version": "1.1",
     "mode": "idea",
-    "startStage": "ideation",
+    "startStage": "survey",
     "stages": {
+      "survey": {
+        "required_elements": [
+          "sections.survey.literature_scope",
+          "sections.survey.synthesis_summary"
+        ],
+        "optional_elements": [
+          "sections.survey.key_references",
+          "sections.survey.open_gaps"
+        ],
+        "quality_gate": [
+          "Literature scope and search boundary are explicit",
+          "Synthesis identifies concrete open gaps"
+        ],
+        "task_blueprints": [
+          {
+            "id": "survey_collect_references",
+            "title": "Collect and triage the core literature set",
+            "description": "Gather key references, cluster them by theme, and document inclusion boundaries.",
+            "taskType": "exploration",
+            "recommended_skills": ["inno-deep-research"]
+          },
+          {
+            "id": "survey_summarize_gaps",
+            "title": "Summarize trends, baselines, and open gaps",
+            "description": "Synthesize the literature into trends, tensions, and high-value research gaps.",
+            "taskType": "analysis",
+            "recommended_skills": ["inno-deep-research", "academic-researcher"]
+          }
+        ],
+        "recommended_skills": ["inno-deep-research", "academic-researcher", "dataset-discovery"]
+      },
       "ideation": {
         "required_elements": [
           "sections.ideation.research_goal",

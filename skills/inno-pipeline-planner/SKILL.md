@@ -32,7 +32,7 @@ Check:
 - `.pipeline/docs/research_brief.json`
 - `.pipeline/tasks/tasks.json`
 - `instance.json` (legacy source)
-- Content in `Ideation/`, `Experiment/`, `Publication/` directories (to detect pre-existing artifacts)
+- Content in `Survey/`, `Ideation/`, `Experiment/`, `Publication/` directories (to detect pre-existing artifacts)
 
 If brief exists, summarize title, goal, current `startStage`, and completion status, then ask:
 - Refine existing brief/tasks
@@ -45,12 +45,14 @@ Capture at least:
 - Topic/problem
 - Goal or hypothesis
 - Success criteria or evaluation signal
+- Current survey depth or known reference set
 
 **Determine the starting stage** early in the conversation:
 - Ask what the user already has: "Do you already have a research idea, experimental results, or are you starting from scratch?"
+- If the user mainly needs literature review, gap analysis, or reference collection -> `startStage = "survey"`
 - If the user has a concrete idea with problem framing and success criteria -> `startStage = "experiment"`
 - If the user has experimental results and analysis -> `startStage = "publication"`
-- If the user is starting from scratch or only has a vague direction -> `startStage = "ideation"` (default)
+- If the user is starting from scratch or only has a vague direction -> `startStage = "survey"` (default)
 - Detect automatically from conversation context (e.g., "I already ran all experiments" implies publication).
 
 Typical question buckets:
@@ -60,7 +62,7 @@ Typical question buckets:
 
 Adapt to context:
 - Skip already-provided details.
-- **Skip questions for stages before `startStage`**: If starting from experiment, do not ask ideation questions in detail — just capture a brief summary of the existing idea for the brief's ideation section.
+- **Skip questions for stages before `startStage`**: If starting from experiment, do not ask survey or ideation questions in detail — just capture a brief summary of the existing context in those sections.
 - If exploratory, keep experiment/publication sections lightweight.
 - If user provides concrete plan, prepare for `pipeline.mode = "plan"`; otherwise use `"idea"`.
 
@@ -75,8 +77,8 @@ Use the exact JSON contracts and generation rules in:
 - `references/pipeline-contract.md` and linked reference files
 
 Rules:
-- Set `pipeline.startStage` to the determined starting stage (default: `"ideation"`).
-- **Generate tasks only for stages >= `startStage`** in the stage order (ideation < experiment < publication).
+- Set `pipeline.startStage` to the determined starting stage (default: `"survey"`).
+- **Generate tasks only for stages >= `startStage`** in the stage order (survey < ideation < experiment < publication < promotion).
 - For skipped stages: still populate their `sections.*` fields in the brief with whatever context the user provided, but do not create task blueprints or tasks for them.
 - Tailor blueprint titles/descriptions to the user topic (never generic filler).
 - Keep quality gates domain-appropriate.
