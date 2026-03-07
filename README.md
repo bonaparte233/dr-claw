@@ -1,6 +1,6 @@
 <div align="center">
   <img src="public/favicon.png" alt="VibeLab" width="96" height="96">
-  <h1>VibeLab: A General-Purpose AI Research Assistant from Idea to Paper</h1>
+  <h1>VibeLab: Your AI Research Assistant</h1>
   <p><strong>Plan, run, and write research in one workspace.</strong></p>
 </div>
 
