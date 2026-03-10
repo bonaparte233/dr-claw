@@ -490,6 +490,23 @@ async function getProjects(userId, progressCallback = null) {
       }
     }
 
+    // 3. Add projects ALREADY in DB that weren't discovered yet
+    for (const dbEntry of allDbProjects) {
+      // If we're filtering by userId, only include projects that belong to them.
+      // If userId is null (timer/broadcast), include everything.
+      const isVisible = !userId || dbEntry.user_id === userId;
+      
+      if (isVisible) {
+        if (!discoveredDirectories.some(d => d.entry.name === dbEntry.id)) {
+          discoveredDirectories.push({
+            entry: { name: dbEntry.id },
+            actualProjectDir: dbEntry.path,
+            dbEntry: dbEntry
+          });
+        }
+      }
+    }
+
     totalProjects = discoveredDirectories.length;
 
     for (const { entry, actualProjectDir, dbEntry } of discoveredDirectories) {
@@ -575,6 +592,17 @@ async function getSessions(projectName, limit = 5, offset = 0, userId = null) {
   const { sessionDb } = await import('./database/db.js');
 
   try {
+    // Check if the project directory exists before trying to read it
+    try {
+      await fs.access(projectDir);
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        // No Claude sessions for this project yet, which is fine for manual projects
+        return { sessions: [], hasMore: false, total: 0 };
+      }
+      throw err;
+    }
+
     const files = await fs.readdir(projectDir);
     const jsonlFiles = files.filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'));
 
@@ -1598,7 +1626,7 @@ async function ensureProjectSkillLinks(projectPath) {
 }
 
 // Add a project manually to the config (without creating folders)
-async function addProjectManually(projectPath, displayName = null) {
+async function addProjectManually(projectPath, displayName = null, userId = null) {
   const { projectDb } = await import('./database/db.js');
   const absolutePath = path.resolve(projectPath);
 
@@ -1616,7 +1644,7 @@ async function addProjectManually(projectPath, displayName = null) {
   const config = await loadProjectConfig();
 
   // 1. Sync to Database (Source of Truth)
-  projectDb.upsertProject(projectName, null, displayName, absolutePath, 0, new Date().toISOString(), { manuallyAdded: true });
+  projectDb.upsertProject(projectName, userId, displayName, absolutePath, 0, new Date().toISOString(), { manuallyAdded: true });
 
   // 2. Sync to Claude Config (compatibility)
   config[projectName] = {

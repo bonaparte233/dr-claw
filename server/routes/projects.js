@@ -243,7 +243,7 @@ router.put('/workspace-root', async (req, res) => {
  */
 router.post('/create-workspace', async (req, res) => {
   try {
-    const { workspaceType, path: workspacePath, githubUrl, githubTokenId, newGithubToken } = req.body;
+    const { workspaceType, path: workspacePath, githubUrl, githubTokenId, newGithubToken, displayName } = req.body;
 
     // Validate required fields
     if (!workspaceType || !workspacePath) {
@@ -283,7 +283,7 @@ router.post('/create-workspace', async (req, res) => {
       }
 
       // Add the existing workspace to the project list
-      const project = await addProjectManually(absolutePath);
+      const project = await addProjectManually(absolutePath, displayName, req.user?.id);
 
       return res.json({
         success: true,
@@ -348,7 +348,7 @@ router.post('/create-workspace', async (req, res) => {
         }
 
         // Add the cloned repo path to the project list
-        const project = await addProjectManually(clonePath);
+        const project = await addProjectManually(clonePath, displayName, req.user?.id);
 
         return res.json({
           success: true,
@@ -358,7 +358,7 @@ router.post('/create-workspace', async (req, res) => {
       }
 
       // Add the new workspace to the project list (no clone)
-      const project = await addProjectManually(absolutePath);
+      const project = await addProjectManually(absolutePath, displayName, req.user?.id);
 
       return res.json({
         success: true,

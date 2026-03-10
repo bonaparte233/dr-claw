@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FolderPlus, ChevronRight, ChevronLeft, Check, Loader2, AlertCircle, FolderOpen, Eye, EyeOff, Plus, RefreshCw } from 'lucide-react';
+import { X, FolderPlus, ChevronRight, ChevronLeft, Check, Loader2, AlertCircle, FolderOpen, Eye, EyeOff, Plus, RefreshCw, GitBranch } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { api } from '../utils/api';
@@ -14,6 +14,7 @@ const ProjectCreationWizard = ({ onClose, onProjectCreated }) => {
 
   // Form state
   const [workspacePath, setWorkspacePath] = useState('');
+  const [projectName, setProjectName] = useState('');
 
   // UI state
   const [isCreating, setIsCreating] = useState(false);
@@ -65,27 +66,29 @@ const ProjectCreationWizard = ({ onClose, onProjectCreated }) => {
 
   // Auto-fill new workspace path so users can continue without opening folder browser.
   useEffect(() => {
-    if (step !== 2 || workspaceType !== 'new' || workspacePath.trim()) {
+    if (step !== 2 || workspaceType !== 'new' || (workspacePath.trim() && projectName.trim())) {
       return;
     }
 
     const autoFillPath = async () => {
       const suggestedName = generateWorkspaceName();
       try {
-        const response = await api.browseFilesystem('~/vibelab');
+        const response = await api.browseFilesystem('~');
         const data = await response.json();
         const basePath = data.path || '~/vibelab';
         const suggestedPath = appendPathSegment(basePath, suggestedName);
         setWorkspacePath((currentPath) => (currentPath.trim() ? currentPath : suggestedPath));
+        setProjectName((currentName) => (currentName.trim() ? currentName : suggestedName));
       } catch (error) {
         console.error('Error auto-filling workspace path:', error);
         const fallbackPath = `~/vibelab/${suggestedName}`;
         setWorkspacePath((currentPath) => (currentPath.trim() ? currentPath : fallbackPath));
+        setProjectName((currentName) => (currentName.trim() ? currentName : suggestedName));
       }
     };
 
     autoFillPath();
-  }, [step, workspaceType, workspacePath]);
+  }, [step, workspaceType, workspacePath, projectName]);
 
   // Load path suggestions
   useEffect(() => {
@@ -141,6 +144,14 @@ const ProjectCreationWizard = ({ onClose, onProjectCreated }) => {
         return;
       }
 
+      // If no project name specified, use the last part of path
+      if (!projectName.trim()) {
+        const parts = workspacePath.split(/[\\/]/).filter(Boolean);
+        if (parts.length > 0) {
+          setProjectName(parts[parts.length - 1]);
+        }
+      }
+
       // No validation for GitHub token - it's optional (only needed for private repos)
       setStep(3);
     }
@@ -159,6 +170,7 @@ const ProjectCreationWizard = ({ onClose, onProjectCreated }) => {
       const payload = {
         workspaceType,
         path: workspacePath.trim(),
+        displayName: projectName.trim(),
       };
 
       const response = await api.createWorkspace(payload);
@@ -375,6 +387,50 @@ const ProjectCreationWizard = ({ onClose, onProjectCreated }) => {
           {/* Step 2: Configure workspace */}
           {step === 2 && (
             <div className="space-y-4">
+              {/* Project Name (Optional/New) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t('projectWizard.step2.projectName', 'Project Name')}
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    value={projectName}
+                    onChange={(e) => {
+                      const newName = e.target.value;
+                      setProjectName(newName);
+                      
+                      // If it's a new workspace and path follows default pattern, update path too
+                      if (workspaceType === 'new' && newName.trim()) {
+                        const parentPath = getParentDirectoryPath(workspacePath);
+                        setWorkspacePath(appendPathSegment(parentPath, newName.trim()));
+                      }
+                    }}
+                    placeholder={t('projectWizard.step2.projectNamePlaceholder', 'Enter project name')}
+                    className="flex-1"
+                  />
+                  {workspaceType === 'new' && (
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      type="button"
+                      onClick={() => {
+                        const suggestedName = generateWorkspaceName();
+                        setProjectName(suggestedName);
+                        const parentPath = getParentDirectoryPath(workspacePath);
+                        setWorkspacePath(appendPathSegment(parentPath, suggestedName));
+                      }}
+                      title={t('projectWizard.folderBrowser.regenerateName')}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t('projectWizard.step2.projectNameHelp', 'A friendly name for your project.')}
+                </p>
+              </div>
+
               {/* Workspace Path */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

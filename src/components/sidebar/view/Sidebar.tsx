@@ -10,6 +10,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import SidebarCollapsed from './subcomponents/SidebarCollapsed';
 import SidebarContent from './subcomponents/SidebarContent';
 import SidebarModals from './subcomponents/SidebarModals';
+import ProjectCreationWizard from '../../ProjectCreationWizard';
 import { api } from '../../../utils/api';
 import { generateWorkspaceName } from '../../../utils/workspaceNameGenerator';
 import type { Project } from '../../../types/app';
@@ -125,7 +126,7 @@ function Sidebar({
     document.body.classList.toggle('pwa-mode', isPWA);
   }, [isPWA]);
 
-  const [creatingProject, setCreatingProject] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
 
   const handleProjectCreated = () => {
     if (window.refreshProjects) {
@@ -135,41 +136,6 @@ function Sidebar({
 
     window.location.reload();
   };
-
-  const handleQuickCreateProject = useCallback(async () => {
-    if (creatingProject) return;
-    setCreatingProject(true);
-    try {
-      const fsResponse = await (api as any).browseFilesystem('~');
-      const fsData = await fsResponse.json();
-      const homePath = fsData.path || '~/vibelab';
-      const name = generateWorkspaceName();
-      const workspacePath = `${homePath}/${name}`;
-
-      const response = await api.createWorkspace({ workspaceType: 'new', path: workspacePath });
-      const data = await response.json();
-      if (!response.ok) {
-        console.error('Failed to quick-create project:', data.error || data.details);
-        return;
-      }
-
-      if (window.refreshProjects) {
-        await window.refreshProjects();
-      }
-
-      if (data.project) {
-        if (window.handleProjectCreatedWithIntake) {
-          window.handleProjectCreatedWithIntake(data.project as Project);
-        } else {
-          handleProjectSelect(data.project as Project);
-        }
-      }
-    } catch (err) {
-      console.error('Error quick-creating project:', err);
-    } finally {
-      setCreatingProject(false);
-    }
-  }, [creatingProject, handleProjectSelect]);
 
   const projectListProps: SidebarProjectListProps = {
     projects,
@@ -245,6 +211,20 @@ function Sidebar({
         t={t}
       />
 
+      {showWizard && (
+        <ProjectCreationWizard
+          onClose={() => setShowWizard(false)}
+          onProjectCreated={(project) => {
+            setShowWizard(false);
+            if (window.handleProjectCreatedWithIntake) {
+              window.handleProjectCreatedWithIntake(project as Project);
+            } else {
+              handleProjectSelect(project as Project);
+            }
+          }}
+        />
+      )}
+
       {isSidebarCollapsed ? (
         <SidebarCollapsed
           onExpand={handleExpandSidebar}
@@ -270,8 +250,9 @@ function Sidebar({
             activeTab={activeTab}
             onOpenDashboard={onOpenDashboard}
             onOpenSkills={onOpenSkills}
-            onCreateProject={() => void handleQuickCreateProject()}
+            onCreateProject={() => setShowWizard(true)}
             onCollapseSidebar={handleCollapseSidebar}
+
             updateAvailable={updateAvailable}
             releaseInfo={releaseInfo}
             latestVersion={latestVersion}
