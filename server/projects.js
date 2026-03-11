@@ -455,12 +455,12 @@ async function getProjects(userId, progressCallback = null) {
       if (!actualDir) continue;
 
       const dbEntry = globalProjectMap.get(entry.name);
-      
+
       // LOGIC FOR VISIBILITY:
       // A. If it's already in DB and belongs to THIS user -> Visible
       // B. If it's NOT in DB at all -> Visible (will be claimed)
       // C. If it's in DB but belongs to someone else -> HIDDEN
-      
+
       if (dbEntry) {
         if (dbEntry.user_id === userId) {
           discoveredDirectories.push({ entry, actualProjectDir: actualDir, dbEntry });
@@ -475,16 +475,16 @@ async function getProjects(userId, progressCallback = null) {
     // Process unclaimed projects from Claude config too
     for (const [projectName, projectConfig] of Object.entries(config)) {
       if (!projectConfig?.originalPath) continue;
-      
+
       const dbEntry = globalProjectMap.get(projectName);
       if (!dbEntry || !dbEntry.user_id) {
         // This project exists in config but not assigned in DB yet
         // Only add if not already added from filesystem scan
         if (!discoveredDirectories.some(d => d.entry.name === projectName)) {
-          discoveredDirectories.push({ 
-            entry: { name: projectName }, 
-            actualProjectDir: projectConfig.originalPath, 
-            dbEntry: null 
+          discoveredDirectories.push({
+            entry: { name: projectName },
+            actualProjectDir: projectConfig.originalPath,
+            dbEntry: null
           });
         }
       }
@@ -495,7 +495,7 @@ async function getProjects(userId, progressCallback = null) {
       // If we're filtering by userId, only include projects that belong to them.
       // If userId is null (timer/broadcast), include everything.
       const isVisible = !userId || dbEntry.user_id === userId;
-      
+
       if (isVisible) {
         if (!discoveredDirectories.some(d => d.entry.name === dbEntry.id)) {
           discoveredDirectories.push({
@@ -542,11 +542,11 @@ async function getProjects(userId, progressCallback = null) {
         // CLAIM LOGIC: If not assigned, assign to current user now
         if (!dbEntry || !dbEntry.user_id) {
           projectDb.upsertProject(
-            entry.name, 
-            userId, 
-            displayName, 
-            actualProjectDir, 
-            project.isStarred ? 1 : 0, 
+            entry.name,
+            userId,
+            displayName,
+            actualProjectDir,
+            project.isStarred ? 1 : 0,
             null,
             config[entry.name]?.manuallyAdded ? { manuallyAdded: true } : null
           );
@@ -610,7 +610,7 @@ async function getSessions(projectName, limit = 5, offset = 0, userId = null) {
       return { sessions: [], hasMore: false, total: 0 };
     }
 
-    // Fetch indexed sessions from database - filter by userId? 
+    // Fetch indexed sessions from database - filter by userId?
     // Usually sessions inherit project ownership, but we store it anyway.
     const dbSessions = sessionDb.getSessionsByProject(projectName);
     const dbSessionMap = new Map(dbSessions.filter(s => s.provider === 'claude').map(s => [s.id, s]));
@@ -640,7 +640,7 @@ async function getSessions(projectName, limit = 5, offset = 0, userId = null) {
       result.sessions.forEach(session => {
         if (!allSessions.has(session.id)) {
           allSessions.set(session.id, session);
-          
+
           // Upsert new sessions discovered from files to DB for caching
           if (!dbSessionMap.has(session.id)) {
             const lastActivity = session.lastActivity instanceof Date ? session.lastActivity.toISOString() : session.lastActivity;
@@ -1020,7 +1020,7 @@ async function getSessionMessages(projectName, sessionId, limit = null, offset =
             const role = entry.role || entry.message?.role;
             const content = entry.content || entry.message?.content;
             const hasContent = content || (Array.isArray(entry.message?.content) || typeof entry.message?.content === 'string');
-            
+
             if (entry.type === 'message' || (role && hasContent) || entry.type === 'tool_use' || entry.type === 'tool_result') {
               // Ensure role and content are available at top level for the frontend
               if (!entry.role && role) entry.role = role;
@@ -1030,15 +1030,15 @@ async function getSessionMessages(projectName, sessionId, limit = null, offset =
           } catch (parseError) {}
         }
       }
-      
+
       console.log(`[DEBUG] Found ${messages.length} valid messages in Gemini session file`);
       const total = messages.length;
       if (limit === null) return messages;
-      
+
       const startIndex = Math.max(0, total - offset - limit);
       const endIndex = total - offset;
       const paginatedMessages = messages.slice(startIndex, endIndex);
-      
+
       return {
         messages: paginatedMessages,
         total,
@@ -1791,7 +1791,11 @@ async function getCursorSessions(projectPath) {
 
 
 // Fetch Gemini sessions for a given project path
-async function getGeminiSessions(projectPath, userId = null) {
+async function getGeminiSessions(projectPath, optionsOrUserId = null) {
+  const options = optionsOrUserId && typeof optionsOrUserId === 'object' && !Array.isArray(optionsOrUserId)
+    ? optionsOrUserId
+    : {};
+  const { limit = 5 } = options;
   try {
     const { sessionDb } = await import('./database/db.js');
     const normalizedProjectPath = await normalizeComparablePath(projectPath);
@@ -1806,7 +1810,7 @@ async function getGeminiSessions(projectPath, userId = null) {
 
     const files = await fs.readdir(geminiSessionsDir);
     const sessions = [];
-    
+
     // Fetch indexed sessions from database for quick lookup
     const dbSessions = sessionDb.getSessionsByProject(projectName);
     const dbSessionMap = new Map(dbSessions.map(s => [s.id, s]));
@@ -1818,11 +1822,11 @@ async function getGeminiSessions(projectPath, userId = null) {
       const filePath = path.join(geminiSessionsDir, file);
       try {
         const stats = await fs.stat(filePath);
-        
-        // If we already have this in DB and it was manually renamed, 
-        // we might still need to check if it belongs to this project 
+
+        // If we already have this in DB and it was manually renamed,
+        // we might still need to check if it belongs to this project
         // if it's not already in the dbSessionMap.
-        
+
         let foundMatchingCwd = false;
         let explicitTitle = null;
         let firstMessageText = null;
@@ -1848,7 +1852,7 @@ async function getGeminiSessions(projectPath, userId = null) {
             if (line.trim()) {
               try {
                 const entry = JSON.parse(line);
-                
+
                 // 1. CWD Match
                 if (!foundMatchingCwd) {
                   const sessionCwd = entry.cwd || entry.payload?.cwd;
@@ -1862,7 +1866,7 @@ async function getGeminiSessions(projectPath, userId = null) {
 
                 // 2. Explicit Title
                 const title = entry.summary || entry.title || entry.payload?.title || entry.payload?.summary;
-                if (title && typeof title === 'string' && title.trim() && 
+                if (title && typeof title === 'string' && title.trim() &&
                     !title.includes('Gemini Session') && !title.includes('New Session')) {
                   explicitTitle = title.trim();
                 }
@@ -1871,7 +1875,7 @@ async function getGeminiSessions(projectPath, userId = null) {
                 if (!firstMessageText && (entry.role === 'user' || (entry.type === 'message' && entry.role === 'user'))) {
                   let content = entry.content || entry.message?.content || entry.payload?.message?.content;
                   if (content) {
-                    let textContent = typeof content === 'string' ? content : 
+                    let textContent = typeof content === 'string' ? content :
                       Array.isArray(content) ? content.map(part => part.text || (typeof part === 'string' ? part : '')).join(' ') : '';
 
                     if (textContent.trim()) {
@@ -1910,6 +1914,7 @@ async function getGeminiSessions(projectPath, userId = null) {
             lastActivity: stats.mtime.toISOString(),
             messageCount: 0,
             projectPath: projectPath,
+            filePath,
             __provider: 'gemini'
           });
         }
@@ -1919,7 +1924,8 @@ async function getGeminiSessions(projectPath, userId = null) {
     if (sessions.length > 0) {
       console.log(`[Gemini] Found ${sessions.length} sessions for project ${projectPath}`);
     }
-    return sessions.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity)).slice(0, 5);
+    const sortedSessions = sessions.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
+    return limit > 0 ? sortedSessions.slice(0, limit) : sortedSessions;
   } catch (error) {
     console.error('Error fetching Gemini sessions:', error);
     return [];
@@ -2438,22 +2444,22 @@ async function renameSession(projectName, sessionId, newSummary, provider = 'cla
         timestamp: new Date().toISOString()
       };
       await fs.appendFile(geminiSessionFile, JSON.stringify(summaryEntry) + '\n');
-      
+
       // Also update VibeLab's own index (source of truth)
       sessionDb.upsertSession(sessionId, projectName, provider, trimmedSummary, new Date().toISOString());
-      
+
       console.log(`[Gemini] Renamed session ${sessionId} to "${trimmedSummary}"`);
       return true;
     } catch (e) {
       console.error(`[Gemini] Failed to rename session ${sessionId}:`, e.message);
       throw new Error(`Failed to rename Gemini session: ${e.message}`);
     }
-  } 
+  }
   // 2. Handle Cursor sessions (SQLite)
   else if (provider === 'cursor') {
     const config = await loadProjectConfig();
     const projectPath = config[projectName]?.path || config[projectName]?.originalPath || await extractProjectDirectory(projectName);
-    
+
     if (!projectPath) {
       throw new Error(`Could not determine project path for ${projectName}`);
     }
@@ -2481,7 +2487,7 @@ async function renameSession(projectName, sessionId, newSummary, provider = 'cla
       console.error(`[Cursor] Failed to rename session ${sessionId}:`, e.message);
       throw new Error(`Failed to rename Cursor session: ${e.message}`);
     }
-  } 
+  }
   // 3. Handle Claude sessions (JSONL)
   else {
     const projectDir = path.join(os.homedir(), '.claude', 'projects', projectName);

@@ -399,7 +399,7 @@ const ProjectCreationWizard = ({ onClose, onProjectCreated }) => {
                     onChange={(e) => {
                       const newName = e.target.value;
                       setProjectName(newName);
-                      
+
                       // If it's a new workspace and path follows default pattern, update path too
                       if (workspaceType === 'new' && newName.trim()) {
                         const parentPath = getParentDirectoryPath(workspacePath);
