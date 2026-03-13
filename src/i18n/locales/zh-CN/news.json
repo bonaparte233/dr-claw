@@ -14,9 +14,9 @@
   },
   "actions": {
     "settings": "设置",
-    "refresh": "刷新",
+    "refresh": "更新",
     "clear": "清除",
-    "searchAll": "全部搜索",
+    "searchAll": "获取最新",
     "searching": "搜索中...",
     "startSearch": "开始搜索",
     "openSettings": "打开设置",

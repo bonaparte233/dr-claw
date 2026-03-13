@@ -20,7 +20,7 @@ const SCRIPTS_DIR = path.join(__dirname, '..', 'scripts');
 const SOURCE_REGISTRY = {
   arxiv: {
     label: 'arXiv',
-    script: 'research-news/scripts/search_arxiv.py',
+    script: 'research-news/search_arxiv.py',
     configFile: 'news-config-arxiv.json',
     resultsFile: 'news-results-arxiv.json',
     defaultConfig: {
@@ -49,7 +49,7 @@ const SOURCE_REGISTRY = {
   },
   huggingface: {
     label: 'HuggingFace Daily Papers',
-    script: 'research-news/scripts/search_huggingface.py',
+    script: 'research-news/search_huggingface.py',
     configFile: 'news-config-huggingface.json',
     resultsFile: 'news-results-huggingface.json',
     defaultConfig: {
@@ -60,7 +60,7 @@ const SOURCE_REGISTRY = {
   },
   x: {
     label: 'X (Twitter)',
-    script: 'research-news/scripts/search_x.py',
+    script: 'research-news/search_x.py',
     configFile: 'news-config-x.json',
     resultsFile: 'news-results-x.json',
     defaultConfig: {
@@ -79,7 +79,7 @@ const SOURCE_REGISTRY = {
   },
   xiaohongshu: {
     label: 'Xiaohongshu',
-    script: 'research-news/scripts/search_xiaohongshu.py',
+    script: 'research-news/search_xiaohongshu.py',
     configFile: 'news-config-xiaohongshu.json',
     resultsFile: 'news-results-xiaohongshu.json',
     defaultConfig: {

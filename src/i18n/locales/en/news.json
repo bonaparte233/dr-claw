@@ -14,9 +14,9 @@
   },
   "actions": {
     "settings": "Settings",
-    "refresh": "Refresh",
+    "refresh": "Update",
     "clear": "Clear",
-    "searchAll": "Search All",
+    "searchAll": "Fetch Latest",
     "searching": "Searching...",
     "startSearch": "Start Search",
     "openSettings": "Open Settings",
