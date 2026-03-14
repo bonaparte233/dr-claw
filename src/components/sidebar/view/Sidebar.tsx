@@ -206,6 +206,7 @@ function Sidebar({
           onClose={() => setShowWizard(false)}
           onProjectCreated={(project: Project) => {
             setShowWizard(false);
+            window.refreshProjects?.();
             if (window.handleProjectCreatedWithIntake) {
               window.handleProjectCreatedWithIntake(project);
             } else {

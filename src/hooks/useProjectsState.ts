@@ -368,7 +368,11 @@ export function useProjectsState({
     (project: Project) => {
       setSelectedProject(project);
       setSelectedSession(null);
-      setActiveTab((currentTab) => (currentTab === 'dashboard' ? 'chat' : currentTab));
+      setActiveTab((currentTab) =>
+        currentTab === 'dashboard' || currentTab === 'news' || currentTab === 'skills'
+          ? 'chat'
+          : currentTab,
+      );
       navigate('/');
 
       if (isMobile) {
