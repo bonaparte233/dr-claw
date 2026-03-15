@@ -5,34 +5,97 @@ Terminology note: VibeLab uses "session" on the server side; the CLI surface
 calls these "conversations" to avoid clashing with the HTTP session concept.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Union
 
 from .session import VibeLab
 
 
-def list_sessions(client: VibeLab, project_id: str) -> List[Dict[str, Any]]:
-    """
-    GET /api/projects/sessions/:projectId
+SessionPage = Dict[str, Any]
+MessagePage = Dict[str, Any]
 
-    Returns a list of session dicts for the given project.  Each dict
-    typically contains ``id``, ``title``, ``created_at``, and ``provider``.
-    """
-    resp = client.get(f"/api/projects/sessions/{project_id}")
-    data = resp.json()
+
+def _normalize_page(data: Any, item_key: str, limit: Optional[int], offset: Optional[int]) -> Dict[str, Any]:
+    """Normalize list-or-dict API responses into a paginated dict shape."""
     if isinstance(data, list):
-        return data
-    return data.get("sessions", data)
+        return {
+            item_key: data,
+            "total": len(data),
+            "hasMore": False,
+            "offset": offset or 0,
+            "limit": limit,
+        }
+
+    if isinstance(data, dict):
+        items = data.get(item_key)
+        normalized = dict(data)
+        normalized[item_key] = items if isinstance(items, list) else []
+        normalized.setdefault("total", len(normalized[item_key]))
+        normalized.setdefault("hasMore", False)
+        normalized.setdefault("offset", offset or 0)
+        normalized.setdefault("limit", limit)
+        return normalized
+
+    return {
+        item_key: [],
+        "total": 0,
+        "hasMore": False,
+        "offset": offset or 0,
+        "limit": limit,
+    }
 
 
-def get_session_messages(client: VibeLab, session_id: str) -> List[Dict[str, Any]]:
+def list_sessions(
+    client: VibeLab,
+    project_name: str,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+    include_meta: bool = False,
+) -> Union[List[Dict[str, Any]], SessionPage]:
     """
-    GET /api/projects/sessions/:sessionId/messages
+    GET /api/projects/:projectName/sessions
 
-    Returns the ordered list of message dicts for the given session.  Each
-    dict typically contains ``role``, ``content``, and ``timestamp``.
+    Returns a list of session dicts for the given project. When ``include_meta``
+    is True, returns the full paginated response shape from the server.
     """
-    resp = client.get(f"/api/projects/sessions/{session_id}/messages")
+    params: Dict[str, Any] = {}
+    if limit is not None:
+        params["limit"] = limit
+    if offset is not None:
+        params["offset"] = offset
+
+    resp = client.get(f"/api/projects/{project_name}/sessions", params=params or None)
     data = resp.json()
-    if isinstance(data, list):
-        return data
-    return data.get("messages", data)
+    page = _normalize_page(data, "sessions", limit=limit, offset=offset)
+    return page if include_meta else page["sessions"]
+
+
+def get_session_messages(
+    client: VibeLab,
+    project_name: str,
+    session_id: str,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+    provider: Optional[str] = None,
+    include_meta: bool = False,
+) -> Union[List[Dict[str, Any]], MessagePage]:
+    """
+    GET /api/projects/:projectName/sessions/:sessionId/messages
+
+    Returns the ordered list of message dicts for the given session. When
+    ``include_meta`` is True, returns the full paginated response shape.
+    """
+    params: Dict[str, Any] = {}
+    if limit is not None:
+        params["limit"] = limit
+    if offset is not None:
+        params["offset"] = offset
+    if provider:
+        params["provider"] = provider
+
+    resp = client.get(
+        f"/api/projects/{project_name}/sessions/{session_id}/messages",
+        params=params or None,
+    )
+    data = resp.json()
+    page = _normalize_page(data, "messages", limit=limit, offset=offset)
+    return page if include_meta else page["messages"]

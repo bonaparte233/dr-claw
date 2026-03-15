@@ -1,49 +1,115 @@
 ---
 name: vibelab
-description: VibeLab AI Research Workspace — manage research projects, query Claude sessions, and track experiment progress
+description: VibeLab / Dr. Claw workspace skill for project lookup, session inspection, TaskMaster progress, and OpenClaw reporting
 ---
 
 # VibeLab Research Skill
 
-VibeLab is a local AI research workspace. Use this skill when the user asks about their research projects, experiments, or wants to interact with their AI coding sessions.
+Use this skill when the user asks about VibeLab or Dr. Claw projects, wants to inspect Claude/Cursor/Codex/Gemini sessions, or needs task progress pushed to OpenClaw/mobile.
 
 ## Setup check
-Before using, verify VibeLab is running:
+
+Before using VibeLab, verify the server is reachable:
+
 ```bash
 vibelab server status
 ```
-If not running, start it: `vibelab server on`
 
-## List research projects
+If needed, start it:
+
+```bash
+vibelab server on
+```
+
+## Project discovery
+
 ```bash
 vibelab --json projects list
 ```
-Returns JSON list of projects. Each project has `id`, `name`, `path`, `provider`.
 
-## Send a message to a research session
+Project references accepted by the CLI:
+
+- `name`
+- `displayName`
+- filesystem `path` / `fullPath`
+
+If a path exists locally but is not registered yet:
+
 ```bash
-vibelab --json chat send --project <project-id> --message "<user message>"
+vibelab projects add /absolute/path/to/project --name "Display Name"
 ```
-This talks to the Claude agent in that project. Returns `{"reply": "...", "session_id": "..."}`.
 
-## Check active sessions
+## Session workflows
+
+List sessions:
+
+```bash
+vibelab --json sessions list <project-ref>
+vibelab --json sessions list <project-ref> --provider cursor
+```
+
+Fetch messages:
+
+```bash
+vibelab --json sessions messages <project-ref> <session-id> --provider claude --limit 100
+```
+
+Send Claude a message:
+
+```bash
+vibelab --json chat send --project <project-ref> --message "<user message>"
+```
+
+List active sessions across projects:
+
 ```bash
 vibelab --json chat sessions
 ```
 
-## Switch the active project (user says /use <project-id>)
-When the user says `/use <something>`, extract the project identifier, find it via `projects list`, and remember the project-id for subsequent messages in this conversation. Tell the user which project is now active.
+## TaskMaster workflows
 
-## Workflow for user questions about research
-1. If user hasn't specified a project, run `projects list` and ask which one (or pick the most recently accessed).
-2. Send the message with `chat send --project <id> --message "<user's question>"`.
-3. Return the reply as-is.
+Check whether TaskMaster is present:
 
-## Proactive progress updates
-VibeLab can push updates to you. To enable: `vibelab openclaw configure --push-channel feishu:<chat_id>`
+```bash
+vibelab --json taskmaster detect <project-ref>
+```
 
-## Tips
-- Project IDs look like encoded paths, e.g. `-Users-david-research-myproject`
-- Session IDs are UUIDs
-- If `chat send` times out, the Claude session may be processing — try again in a moment
-- Use `--json` flag for all commands to get machine-readable output
+Get progress and next action:
+
+```bash
+vibelab --json taskmaster summary <project-ref>
+vibelab --json taskmaster next-guidance <project-ref>
+```
+
+Initialize `.pipeline` for a project if needed:
+
+```bash
+vibelab taskmaster init <project-ref>
+```
+
+## OpenClaw / mobile reporting
+
+Configure the default push channel once:
+
+```bash
+vibelab openclaw configure --push-channel feishu:<chat_id>
+```
+
+Preview a mobile report:
+
+```bash
+vibelab --json openclaw report --project <project-ref> --dry-run
+```
+
+Send it:
+
+```bash
+vibelab openclaw report --project <project-ref>
+```
+
+## Recommended operating flow
+
+1. If the user did not specify a project, run `projects list` and resolve the project first.
+2. For freeform project questions, use `chat send`.
+3. For status/progress questions, prefer `taskmaster summary` and `taskmaster next-guidance`.
+4. For proactive mobile updates, use `openclaw report`.

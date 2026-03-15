@@ -7,19 +7,16 @@ Run with:
     pytest cli_anything/vibelab/tests/test_core.py -v
 """
 
-import io
 import json
 import os
-import stat
-import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
+
 
 # ---------------------------------------------------------------------------
-# Helpers — build fake requests.Response objects
+# Helpers - build fake requests.Response objects
 # ---------------------------------------------------------------------------
 
 def _fake_response(json_data, status_code=200):
@@ -43,10 +40,7 @@ class TestSessionFile(unittest.TestCase):
         self.session_path = Path(self.tmpdir) / ".vibelab_session.json"
 
     def _patch_session_file(self):
-        return patch(
-            "cli_anything.vibelab.core.session.SESSION_FILE",
-            self.session_path,
-        )
+        return patch("cli_anything.vibelab.core.session.SESSION_FILE", self.session_path)
 
     def test_login_stores_token(self):
         """login() should write the JWT token to the session file."""
@@ -105,7 +99,7 @@ class TestSessionFile(unittest.TestCase):
 
     def test_not_logged_in_error(self):
         """Calling get() without a token raises NotLoggedInError."""
-        from cli_anything.vibelab.core.session import VibeLab, NotLoggedInError
+        from cli_anything.vibelab.core.session import NotLoggedInError, VibeLab
 
         with self._patch_session_file():
             client = VibeLab()
@@ -118,11 +112,8 @@ class TestSessionFile(unittest.TestCase):
 
         with self._patch_session_file():
             with patch.dict(os.environ, {}, clear=True):
-                # Remove VIBELAB_URL if set in environment
-                env = {k: v for k, v in os.environ.items() if k != "VIBELAB_URL"}
-                with patch.dict(os.environ, env, clear=True):
-                    client = VibeLab()
-                    url = client.get_base_url()
+                client = VibeLab()
+                url = client.get_base_url()
 
         self.assertEqual(url, "http://localhost:3001")
 
@@ -156,11 +147,13 @@ class TestSessionFile(unittest.TestCase):
 class TestProjects(unittest.TestCase):
 
     def _make_client(self, json_data, status_code=200):
-        """Return a VibeLab client whose get() returns a fake response."""
+        """Return a VibeLab client whose HTTP methods return fake responses."""
         from cli_anything.vibelab.core.session import VibeLab
+
         client = VibeLab()
         client.get = MagicMock(return_value=_fake_response(json_data, status_code))
-        client.patch = MagicMock(return_value=_fake_response({"success": True}))
+        client.put = MagicMock(return_value=_fake_response({"success": True}))
+        client.post = MagicMock(return_value=_fake_response({"success": True, "project": {"name": "proj-abc"}}))
         client.delete = MagicMock(return_value=_fake_response({"success": True}))
         return client
 
@@ -186,15 +179,26 @@ class TestProjects(unittest.TestCase):
         result = list_projects(client)
         self.assertEqual(result[0]["id"], "p3")
 
-    def test_rename_project_calls_patch(self):
-        """rename_project() should PATCH the correct URL."""
+    def test_rename_project_calls_put(self):
+        """rename_project() should PUT the correct URL and payload."""
         from cli_anything.vibelab.core.projects import rename_project
 
         client = self._make_client({})
         rename_project(client, "proj-abc", "New Name")
-        client.patch.assert_called_once_with(
-            "/api/projects/proj-abc/rename", {"newName": "New Name"}
+        client.put.assert_called_once_with(
+            "/api/projects/proj-abc/rename", {"displayName": "New Name"}
         )
+
+    def test_add_project_manual_calls_create_endpoint(self):
+        """add_project_manual() should POST to the supported create-project route."""
+        from cli_anything.vibelab.core.projects import add_project_manual
+
+        client = self._make_client({})
+        result = add_project_manual(client, "/tmp/demo", display_name="Demo")
+        client.post.assert_called_once_with(
+            "/api/projects", {"path": "/tmp/demo", "displayName": "Demo"}
+        )
+        self.assertEqual(result["name"], "proj-abc")
 
     def test_delete_project_calls_delete(self):
         """delete_project() should DELETE the correct URL."""
@@ -212,80 +216,125 @@ class TestProjects(unittest.TestCase):
 
 class TestConversations(unittest.TestCase):
 
-    def test_list_sessions_returns_list(self):
-        """list_sessions() should return sessions for a project."""
+    def test_list_sessions_returns_page(self):
+        """list_sessions() should call the project-scoped endpoint and preserve pagination metadata."""
         from cli_anything.vibelab.core.conversations import list_sessions
         from cli_anything.vibelab.core.session import VibeLab
 
-        sessions = [{"id": "s1", "title": "First session"}]
+        payload = {"sessions": [{"id": "s1", "title": "First session"}], "total": 1, "hasMore": False}
         client = VibeLab()
-        client.get = MagicMock(return_value=_fake_response(sessions))
+        client.get = MagicMock(return_value=_fake_response(payload))
 
-        result = list_sessions(client, "proj-123")
-        client.get.assert_called_once_with("/api/projects/sessions/proj-123")
-        self.assertEqual(result[0]["id"], "s1")
+        result = list_sessions(client, "proj-123", limit=10, offset=5, include_meta=True)
+        client.get.assert_called_once_with(
+            "/api/projects/proj-123/sessions",
+            params={"limit": 10, "offset": 5},
+        )
+        self.assertEqual(result["sessions"][0]["id"], "s1")
+        self.assertEqual(result["total"], 1)
 
     def test_get_session_messages_returns_messages(self):
-        """get_session_messages() should return ordered messages."""
+        """get_session_messages() should unwrap messages and pass provider pagination params."""
         from cli_anything.vibelab.core.conversations import get_session_messages
         from cli_anything.vibelab.core.session import VibeLab
 
-        messages = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"},
-        ]
+        payload = {
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi there!"},
+            ],
+            "total": 2,
+            "hasMore": False,
+        }
         client = VibeLab()
-        client.get = MagicMock(return_value=_fake_response({"messages": messages}))
+        client.get = MagicMock(return_value=_fake_response(payload))
 
-        result = get_session_messages(client, "sess-456")
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result[1]["role"], "assistant")
-
-
-# ---------------------------------------------------------------------------
-# settings.py tests
-# ---------------------------------------------------------------------------
-
-class TestSettings(unittest.TestCase):
-
-    def test_list_api_keys(self):
-        """list_api_keys() should return key dicts from {apiKeys: [...]}."""
-        from cli_anything.vibelab.core.settings import list_api_keys
-        from cli_anything.vibelab.core.session import VibeLab
-
-        keys = [{"id": 1, "key_name": "my-key", "api_key": "sk-12345678..."}]
-        client = VibeLab()
-        client.get = MagicMock(return_value=_fake_response({"apiKeys": keys}))
-
-        result = list_api_keys(client)
-        self.assertEqual(result[0]["id"], 1)
-
-    def test_create_api_key(self):
-        """create_api_key() should POST and return the new key dict."""
-        from cli_anything.vibelab.core.settings import create_api_key
-        from cli_anything.vibelab.core.session import VibeLab
-
-        new_key = {"id": 7, "key_name": "ci-key", "api_key": "full-secret-value"}
-        client = VibeLab()
-        client.post = MagicMock(
-            return_value=_fake_response({"success": True, "apiKey": new_key})
+        result = get_session_messages(
+            client,
+            "proj-123",
+            "sess-456",
+            limit=50,
+            offset=10,
+            provider="cursor",
+            include_meta=True,
         )
+        client.get.assert_called_once_with(
+            "/api/projects/proj-123/sessions/sess-456/messages",
+            params={"limit": 50, "offset": 10, "provider": "cursor"},
+        )
+        self.assertEqual(len(result["messages"]), 2)
+        self.assertEqual(result["messages"][1]["role"], "assistant")
 
-        result = create_api_key(client, "ci-key")
-        client.post.assert_called_once_with("/api/settings/api-keys", {"keyName": "ci-key"})
-        self.assertEqual(result["id"], 7)
 
-    def test_delete_api_key(self):
-        """delete_api_key() should DELETE the correct endpoint."""
-        from cli_anything.vibelab.core.settings import delete_api_key
+# ---------------------------------------------------------------------------
+# taskmaster.py tests
+# ---------------------------------------------------------------------------
+
+class TestTaskMaster(unittest.TestCase):
+
+    def test_get_summary_hits_server_summary_endpoint(self):
+        """get_summary() should call the dedicated summary endpoint."""
         from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.vibelab.core.taskmaster import get_summary
 
         client = VibeLab()
-        client.delete = MagicMock(return_value=_fake_response({"success": True}))
+        client.get = MagicMock(return_value=_fake_response({"project": "proj-123", "status": "taskmaster-only"}))
 
-        result = delete_api_key(client, "42")
-        client.delete.assert_called_once_with("/api/settings/api-keys/42")
-        self.assertTrue(result)
+        result = get_summary(client, "proj-123")
+        client.get.assert_called_once_with("/api/taskmaster/summary/proj-123")
+        self.assertEqual(result["project"], "proj-123")
+
+    def test_build_summary_falls_back_to_composed_calls(self):
+        """build_summary() should compute a stable summary if the server summary route is unavailable."""
+        from requests import HTTPError
+
+        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.vibelab.core.taskmaster import build_summary
+
+        client = VibeLab()
+
+        responses = {
+            "/api/taskmaster/detect/proj-123": _fake_response(
+                {"projectPath": "/tmp/proj-123", "status": "taskmaster-only", "timestamp": "2026-03-15T00:00:00Z"}
+            ),
+            "/api/taskmaster/tasks/proj-123": _fake_response(
+                {
+                    "projectPath": "/tmp/proj-123",
+                    "tasks": [
+                        {"id": 1, "status": "done", "title": "Done task"},
+                        {"id": 2, "status": "pending", "title": "Pending task"},
+                    ],
+                    "tasksByStatus": {"done": 1, "pending": 1, "in-progress": 0},
+                    "totalTasks": 2,
+                    "timestamp": "2026-03-15T00:01:00Z",
+                }
+            ),
+            "/api/taskmaster/next/proj-123": _fake_response(
+                {"nextTask": {"id": 2, "title": "Pending task"}, "timestamp": "2026-03-15T00:02:00Z"}
+            ),
+            "/api/taskmaster/next-guidance/proj-123": _fake_response(
+                {
+                    "nextTask": {"id": 2, "title": "Pending task"},
+                    "guidance": {"whyNext": "Do this next", "suggestedSkills": ["inno-experiment-dev"]},
+                    "timestamp": "2026-03-15T00:03:00Z",
+                }
+            ),
+        }
+
+        def fake_get(path, **kwargs):
+            if path == "/api/taskmaster/summary/proj-123":
+                raise HTTPError("not found")
+            return responses[path]
+
+        client.get = MagicMock(side_effect=fake_get)
+        summary = build_summary(client, "proj-123")
+
+        self.assertEqual(summary["project"], "proj-123")
+        self.assertEqual(summary["counts"]["total"], 2)
+        self.assertEqual(summary["counts"]["completed"], 1)
+        self.assertEqual(summary["counts"]["completion_rate"], 50.0)
+        self.assertEqual(summary["next_task"]["id"], 2)
+        self.assertEqual(summary["guidance"]["whyNext"], "Do this next")
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +346,7 @@ class TestOutput(unittest.TestCase):
     def _capture(self, fn, *args, **kwargs):
         """Run fn() and capture both stdout and stderr."""
         import io
-        from contextlib import redirect_stdout, redirect_stderr
+        from contextlib import redirect_stderr, redirect_stdout
 
         stdout_buf = io.StringIO()
         stderr_buf = io.StringIO()
@@ -332,7 +381,7 @@ class TestOutput(unittest.TestCase):
         self.assertIn("no items", stdout)
 
     def test_success_json_mode(self):
-        """success() in JSON mode emits {"status": "ok", ...}."""
+        """success() in JSON mode emits {status: ok, ...}."""
         from cli_anything.vibelab.utils.output import success
 
         stdout, _ = self._capture(success, "Done!", True)

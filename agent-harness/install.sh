@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — one-command setup for cli-anything-vibelab
+# install.sh - one-command setup for the vibelab CLI
 # Creates a symlink in /usr/local/bin so the CLI is available system-wide.
 set -e
 

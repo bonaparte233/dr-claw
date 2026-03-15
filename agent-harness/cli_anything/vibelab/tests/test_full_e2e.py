@@ -1,5 +1,5 @@
 """
-End-to-end tests for cli-anything-vibelab.
+End-to-end tests for vibelab.
 
 These tests hit a real running VibeLab server and are skipped unless the
 VIBELAB_E2E environment variable is set.
@@ -66,7 +66,7 @@ def _resolve_cli(name: str) -> str:
     return name
 
 
-_CLI = _resolve_cli("cli-anything-vibelab")
+_CLI = _resolve_cli("vibelab")
 
 
 def _run_cli(*args, env=None):
@@ -107,7 +107,7 @@ class TestAuthStatus(unittest.TestCase):
         self.assertIn("needsSetup", data)
 
     def test_auth_status_via_cli(self):
-        """cli-anything-vibelab auth status should return valid JSON."""
+        """vibelab auth status should return valid JSON."""
         code, stdout, stderr = _run_cli("--json", "auth", "status")
         self.assertEqual(code, 0, msg=f"stderr: {stderr}")
         data = json.loads(stdout.strip())
@@ -216,14 +216,14 @@ class TestListProjects(unittest.TestCase):
 class TestCLISubprocess(unittest.TestCase):
 
     def test_help_flag(self):
-        """cli-anything-vibelab --help should exit 0 and show usage."""
+        """vibelab --help should exit 0 and show usage."""
         code, stdout, stderr = _run_cli("--help")
         self.assertEqual(code, 0, msg=f"stderr: {stderr}")
         combined = stdout + stderr
         self.assertIn("vibelab", combined.lower())
 
     def test_auth_status_subprocess(self):
-        """cli-anything-vibelab auth status should exit 0."""
+        """vibelab auth status should exit 0."""
         code, stdout, stderr = _run_cli(
             "--json", "--url", BASE_URL, "auth", "status"
         )
@@ -239,7 +239,7 @@ class TestCLISubprocess(unittest.TestCase):
         self.assertIn("Usage", combined)
 
     def test_auth_group_help(self):
-        """cli-anything-vibelab auth --help should list subcommands."""
+        """vibelab auth --help should list subcommands."""
         code, stdout, stderr = _run_cli("auth", "--help")
         self.assertEqual(code, 0)
         combined = stdout + stderr

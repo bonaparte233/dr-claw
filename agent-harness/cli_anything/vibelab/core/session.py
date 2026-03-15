@@ -178,6 +178,17 @@ class VibeLab:
         resp.raise_for_status()
         return resp
 
+    def put(self, path: str, body: Optional[Dict[str, Any]] = None, **kwargs) -> requests.Response:
+        resp = self._session.put(
+            self._url(path),
+            headers=self._auth_headers(),
+            json=body or {},
+            timeout=30,
+            **kwargs,
+        )
+        resp.raise_for_status()
+        return resp
+
     # ------------------------------------------------------------------
     # Unauthenticated helper
     # ------------------------------------------------------------------

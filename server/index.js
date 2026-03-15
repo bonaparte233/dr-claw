@@ -768,21 +768,24 @@ app.delete('/api/projects/:projectName', authenticateToken, async (req, res) => 
 });
 
 // Create project endpoint
-app.post('/api/projects/create', authenticateToken, async (req, res) => {
+async function handleCreateProject(req, res) {
     try {
-        const { path: projectPath } = req.body;
+        const { path: projectPath, displayName = null } = req.body;
 
         if (!projectPath || !projectPath.trim()) {
             return res.status(400).json({ error: 'Project path is required' });
         }
 
-        const project = await addProjectManually(projectPath.trim(), null, req.user?.id);
+        const project = await addProjectManually(projectPath.trim(), displayName, req.user?.id);
         res.json({ success: true, project });
     } catch (error) {
         console.error('Error creating project:', error);
         res.status(500).json({ error: error.message });
     }
-});
+}
+
+app.post('/api/projects/create', authenticateToken, handleCreateProject);
+app.post('/api/projects', authenticateToken, handleCreateProject);
 
 // Read file content endpoint
 app.get('/api/projects/:projectName/file', authenticateToken, async (req, res) => {

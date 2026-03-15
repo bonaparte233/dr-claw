@@ -21,7 +21,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from .session import VibeLab, NotLoggedInError
+from .session import VibeLab
 
 
 # ---------------------------------------------------------------------------
@@ -67,13 +67,18 @@ def _extract_text_from_claude_response(data: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _normalize_project_path(project_path: str) -> str:
+    """Expand `~` and normalize filesystem-style project paths."""
+    return os.path.abspath(os.path.expanduser(project_path))
+
+
 def _ws_url_from_base(base_url: str) -> str:
     """Convert http(s)://host to ws(s)://host."""
     if base_url.startswith("https://"):
         return "wss://" + base_url[len("https://"):]
     if base_url.startswith("http://"):
         return "ws://" + base_url[len("http://"):]
-    return base_url
+    return base_url.rstrip("/")
 
 
 # ---------------------------------------------------------------------------
@@ -107,8 +112,9 @@ def send_message(
     """
     token = client._require_token()
     base_url = client.get_base_url()
-    ws_base = _ws_url_from_base(base_url)
-    ws_url = f"{ws_base}?token={token}"
+    ws_base = _ws_url_from_base(base_url).rstrip("/")
+    ws_url = f"{ws_base}/ws?token={token}"
+    normalized_project_path = _normalize_project_path(project_path)
 
     async def _run() -> Dict[str, Any]:
         try:
@@ -120,14 +126,15 @@ def send_message(
             ) from exc
 
         text_parts: List[str] = []
+        stream_parts: List[str] = []
         captured_session_id: Optional[str] = session_id
-        done = asyncio.Event()
 
         payload = {
             "type": "claude-command",
             "command": message,
             "options": {
-                "projectPath": project_path,
+                "cwd": normalized_project_path,
+                "projectPath": normalized_project_path,
                 "sessionId": session_id,
                 "resume": session_id is not None,
             },
@@ -138,28 +145,12 @@ def send_message(
 
             async def receive_loop() -> None:
                 nonlocal captured_session_id
-                silence_deadline: Optional[float] = None
 
                 while True:
-                    # Use a short receive timeout so we can check silence
-                    recv_timeout = 2.0
                     try:
-                        raw = await asyncio.wait_for(ws.recv(), timeout=recv_timeout)
-                    except asyncio.TimeoutError:
-                        # If we have received content and 2 s of silence, consider done
-                        if text_parts and (
-                            silence_deadline is None
-                            or asyncio.get_event_loop().time() >= silence_deadline
-                        ):
-                            done.set()
-                            return
-                        continue
+                        raw = await ws.recv()
                     except Exception:
-                        done.set()
                         return
-
-                    # Reset silence timer on every message
-                    silence_deadline = asyncio.get_event_loop().time() + 2.0
 
                     try:
                         event = json.loads(raw)
@@ -186,13 +177,29 @@ def send_message(
                         # Capture session id embedded in data
                         if not captured_session_id and isinstance(data, dict):
                             captured_session_id = data.get("session_id") or captured_session_id
+
+                        if isinstance(data, dict) and data.get("type") == "content_block_delta":
+                            delta = data.get("delta", {})
+                            delta_text = delta.get("text") if isinstance(delta, dict) else None
+                            if isinstance(delta_text, str) and delta_text:
+                                stream_parts.append(delta_text)
+                            continue
+
+                        if isinstance(data, dict) and data.get("type") == "content_block_stop":
+                            if stream_parts:
+                                text_parts.append("".join(stream_parts))
+                                stream_parts.clear()
+                            continue
+
                         text = _extract_text_from_claude_response(data)
                         if text:
                             text_parts.append(text)
 
                     elif event_type in ("claude-complete", "complete", "session-complete"):
                         captured_session_id = event.get("sessionId", captured_session_id)
-                        done.set()
+                        if stream_parts:
+                            text_parts.append("".join(stream_parts))
+                            stream_parts.clear()
                         return
 
                     elif event_type == "claude-error":
@@ -201,7 +208,9 @@ def send_message(
 
                     # Generic done signals
                     elif event.get("final") or event.get("done"):
-                        done.set()
+                        if stream_parts:
+                            text_parts.append("".join(stream_parts))
+                            stream_parts.clear()
                         return
 
             await asyncio.wait_for(receive_loop(), timeout=timeout)
@@ -210,7 +219,7 @@ def send_message(
         return {
             "reply": reply,
             "session_id": captured_session_id or "",
-            "project_path": project_path,
+            "project_path": normalized_project_path,
         }
 
     return asyncio.run(_run())
@@ -219,9 +228,6 @@ def send_message(
 def get_active_sessions(client: VibeLab) -> List[Dict[str, Any]]:
     """
     Retrieve all active sessions across all projects.
-
-    Calls GET /api/projects, then for each project calls
-    GET /api/projects/sessions/<projectId>.
 
     Returns a flat list of session dicts, each augmented with
     ``project_id`` and ``project_name`` keys.
@@ -235,27 +241,39 @@ def get_active_sessions(client: VibeLab) -> List[Dict[str, Any]]:
 
     all_sessions: List[Dict[str, Any]] = []
     for project in projects_list:
-        project_id = project.get("id", "")
-        project_name = project.get("name") or project.get("display_name") or project_id
-        if not project_id:
+        project_name = project.get("name") or project.get("id") or ""
+        project_label = (
+            project.get("displayName")
+            or project.get("display_name")
+            or project_name
+        )
+        if not project_name:
             continue
-        try:
-            sessions_resp = client.get(f"/api/projects/sessions/{project_id}")
-            sessions_data = sessions_resp.json()
-            if isinstance(sessions_data, list):
-                sessions = sessions_data
-            elif isinstance(sessions_data, dict):
-                sessions = sessions_data.get("sessions", [])
-            else:
-                sessions = []
+
+        provider_collections = [
+            ("claude", project.get("sessions") or []),
+            ("cursor", project.get("cursorSessions") or []),
+            ("codex", project.get("codexSessions") or []),
+            ("gemini", project.get("geminiSessions") or []),
+        ]
+
+        for provider, sessions in provider_collections:
+            if not isinstance(sessions, list):
+                continue
+
             for session in sessions:
-                if isinstance(session, dict):
-                    session = dict(session)
-                    session.setdefault("project_id", project_id)
-                    session.setdefault("project_name", project_name)
-                    all_sessions.append(session)
-        except Exception:
-            # Skip projects where sessions endpoint fails
-            continue
+                if not isinstance(session, dict):
+                    continue
+
+                normalized = dict(session)
+                normalized.setdefault("provider", provider)
+                normalized.setdefault("project_id", project_name)
+                normalized.setdefault("project_name", project_name)
+                normalized.setdefault("project_display_name", project_label)
+                normalized.setdefault(
+                    "summary",
+                    session.get("summary") or session.get("name") or session.get("title") or "",
+                )
+                all_sessions.append(normalized)
 
     return all_sessions

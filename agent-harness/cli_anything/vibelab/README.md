@@ -1,48 +1,78 @@
-# cli-anything-vibelab
+# vibelab
 
-A stateful Python CLI harness for the [VibeLab](https://github.com/OpenLAIR/VibeLab)
-AI research workspace.
+A stateful Python CLI harness for the VibeLab / Dr. Claw AI research workspace.
 
 ## Installation
 
 ```bash
 pip install -e /path/to/agent-harness
-# or from PyPI once published:
-pip install cli-anything-vibelab
 ```
+
+The console entrypoint is `vibelab`.
 
 ## Quick start
 
 ```bash
 # Check server status (no login required)
-cli-anything-vibelab auth status
+vibelab auth status
 
-# Log in — token is stored in ~/.vibelab_session.json
-cli-anything-vibelab auth login --username admin --password secret
+# Log in; token is stored in ~/.vibelab_session.json
+vibelab auth login --username admin --password secret
 
 # List all projects
-cli-anything-vibelab projects list
+vibelab projects list
+
+# Add a local project path
+vibelab projects add /path/to/project --name "Demo Project"
 
 # Pipe JSON output to jq
-cli-anything-vibelab --json projects list | jq '.[].display_name'
+vibelab --json projects list | jq '.[].displayName'
 
-# List sessions for a project
-cli-anything-vibelab sessions list <project-id>
+# List Claude sessions for a project
+vibelab sessions list <project-ref>
+
+# List Cursor sessions for a project
+vibelab sessions list <project-ref> --provider cursor
 
 # Read messages from a session
-cli-anything-vibelab sessions messages <session-id>
+vibelab sessions messages <project-ref> <session-id> --provider claude
 
-# Manage API keys
-cli-anything-vibelab settings api-keys list
-cli-anything-vibelab settings api-keys create "my-key"
-cli-anything-vibelab settings api-keys delete 42
+# Send a Claude message into a project
+vibelab chat send --project <project-ref> --message "Summarize current progress"
 
-# Rename / delete a project
-cli-anything-vibelab projects rename <project-id> "New Name"
-cli-anything-vibelab projects delete <project-id>
+# Show TaskMaster progress
+vibelab taskmaster summary <project-ref>
+vibelab taskmaster next-guidance <project-ref>
 
-# Log out
-cli-anything-vibelab auth logout
+# Generate a mobile/OpenClaw report without sending
+vibelab openclaw report --project <project-ref> --dry-run
+
+# Configure and send through OpenClaw
+vibelab openclaw configure --push-channel feishu:<chat_id>
+vibelab openclaw report --project <project-ref>
+```
+
+## Project references
+
+Anywhere the CLI accepts `<project-ref>`, you can pass one of:
+
+- the project `name`
+- the project `displayName`
+- the project filesystem `path` / `fullPath`
+
+For `chat send`, a real filesystem path is always resolved before sending the WebSocket command.
+
+## TaskMaster commands
+
+```bash
+vibelab taskmaster status
+vibelab taskmaster detect <project-ref>
+vibelab taskmaster detect-all
+vibelab taskmaster init <project-ref>
+vibelab taskmaster tasks <project-ref>
+vibelab taskmaster next <project-ref>
+vibelab taskmaster next-guidance <project-ref>
+vibelab taskmaster summary <project-ref>
 ```
 
 ## Configuration
@@ -50,17 +80,15 @@ cli-anything-vibelab auth logout
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `VIBELAB_URL` | Server base URL | `http://localhost:3001` |
-| `VIBELAB_TOKEN` | Inject token without session file | *(session file)* |
+| `VIBELAB_TOKEN` | Inject token without session file | session file |
 
 The `--url URL` flag overrides `VIBELAB_URL` for a single invocation.
 
 ## Running tests
 
 ```bash
-# Unit tests only (no server required)
-pytest cli_anything/vibelab/tests/test_core.py -v
-
-# Full E2E tests (requires running server)
-VIBELAB_E2E=1 VIBELAB_USER=admin VIBELAB_PASS=secret \
-    pytest cli_anything/vibelab/tests/ -v
+python3 -m pytest agent-harness/cli_anything/vibelab/tests/test_core.py -q
+PYTHONPATH=agent-harness python3 -m cli_anything.vibelab.vibelab_cli --help
+PYTHONPATH=agent-harness python3 -m cli_anything.vibelab.vibelab_cli taskmaster --help
+PYTHONPATH=agent-harness python3 -m cli_anything.vibelab.vibelab_cli openclaw report --help
 ```
