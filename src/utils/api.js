@@ -214,9 +214,10 @@ export const api = {
     }),
 
   // Browse filesystem for project suggestions
-  browseFilesystem: (dirPath = null) => {
+  browseFilesystem: (dirPath = null, showHidden = false) => {
     const params = new URLSearchParams();
     if (dirPath) params.append('path', dirPath);
+    if (showHidden) params.append('showHidden', 'true');
 
     return authenticatedFetch(`/api/browse-filesystem?${params}`);
   },
