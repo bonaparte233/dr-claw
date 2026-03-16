@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# install.sh - one-command setup for the vibelab CLI
+# install.sh - one-command setup for the Dr. Claw CLI
 # Creates a symlink in /usr/local/bin so the CLI is available system-wide.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BIN_NAME="vibelab"
+BIN_NAME="drclaw"
 
 echo "==> Installing Python package (editable)..."
 pip3 install -e "$SCRIPT_DIR" -q 2>/dev/null || true
@@ -19,13 +19,18 @@ if [ ! -f "$INSTALLED_BIN" ]; then
   exit 1
 fi
 
-SYMLINK_TARGET="/usr/local/bin/$BIN_NAME"
-echo "==> Symlinking $BIN_NAME → /usr/local/bin/"
-ln -sf "$INSTALLED_BIN" "$SYMLINK_TARGET" 2>/dev/null \
-  || sudo ln -sf "$INSTALLED_BIN" "$SYMLINK_TARGET"
+for LINK_NAME in drclaw dr-claw vibelab; do
+  SYMLINK_TARGET="/usr/local/bin/$LINK_NAME"
+  echo "==> Symlinking $LINK_NAME → /usr/local/bin/"
+  ln -sf "$INSTALLED_BIN" "$SYMLINK_TARGET" 2>/dev/null \
+    || sudo ln -sf "$INSTALLED_BIN" "$SYMLINK_TARGET"
+done
 
 echo ""
 echo "✓  Installed!  Try:"
-echo "   $BIN_NAME --help"
-echo "   $BIN_NAME server on"
-echo "   $BIN_NAME server status"
+echo "   drclaw --help"
+echo "   drclaw server on"
+echo "   drclaw server status"
+echo "   # compatibility aliases still work:"
+echo "   dr-claw --help"
+echo "   vibelab --help"

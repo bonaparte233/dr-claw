@@ -1,5 +1,5 @@
 """
-Unit tests for cli_anything.vibelab core modules.
+Unit tests for cli_anything.drclaw core modules.
 
 All tests mock HTTP calls so no running server is required.
 
@@ -40,11 +40,11 @@ class TestSessionFile(unittest.TestCase):
         self.session_path = Path(self.tmpdir) / ".vibelab_session.json"
 
     def _patch_session_file(self):
-        return patch("cli_anything.vibelab.core.session.SESSION_FILE", self.session_path)
+        return patch("cli_anything.drclaw.core.session.SESSION_FILE", self.session_path)
 
     def test_login_stores_token(self):
         """login() should write the JWT token to the session file."""
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.session import VibeLab
 
         fake_resp = _fake_response(
             {"success": True, "token": "fake-jwt-token", "user": {"username": "alice"}}
@@ -62,7 +62,7 @@ class TestSessionFile(unittest.TestCase):
 
     def test_logout_removes_session_file(self):
         """logout() should delete the session file."""
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.session import VibeLab
 
         self.session_path.write_text(json.dumps({"token": "old-token"}))
 
@@ -74,7 +74,7 @@ class TestSessionFile(unittest.TestCase):
 
     def test_get_token_reads_session_file(self):
         """get_token() should return the token from the session file."""
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.session import VibeLab
 
         self.session_path.write_text(json.dumps({"token": "stored-token"}))
 
@@ -86,7 +86,7 @@ class TestSessionFile(unittest.TestCase):
 
     def test_get_token_prefers_env_var(self):
         """VIBELAB_TOKEN env var should take precedence over the session file."""
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.session import VibeLab
 
         self.session_path.write_text(json.dumps({"token": "file-token"}))
 
@@ -99,7 +99,7 @@ class TestSessionFile(unittest.TestCase):
 
     def test_not_logged_in_error(self):
         """Calling get() without a token raises NotLoggedInError."""
-        from cli_anything.vibelab.core.session import NotLoggedInError, VibeLab
+        from cli_anything.drclaw.core.session import NotLoggedInError, VibeLab
 
         with self._patch_session_file():
             client = VibeLab()
@@ -108,7 +108,7 @@ class TestSessionFile(unittest.TestCase):
 
     def test_get_base_url_default(self):
         """get_base_url() should fall back to localhost:3001."""
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.session import VibeLab
 
         with self._patch_session_file():
             with patch.dict(os.environ, {}, clear=True):
@@ -119,7 +119,7 @@ class TestSessionFile(unittest.TestCase):
 
     def test_get_base_url_env_var(self):
         """VIBELAB_URL env var overrides the default."""
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.session import VibeLab
 
         with self._patch_session_file():
             with patch.dict(os.environ, {"VIBELAB_URL": "http://myserver:4000"}):
@@ -130,7 +130,7 @@ class TestSessionFile(unittest.TestCase):
 
     def test_get_base_url_override_param(self):
         """url_override constructor param takes highest precedence."""
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.session import VibeLab
 
         with self._patch_session_file():
             with patch.dict(os.environ, {"VIBELAB_URL": "http://env:9000"}):
@@ -148,7 +148,7 @@ class TestProjects(unittest.TestCase):
 
     def _make_client(self, json_data, status_code=200):
         """Return a VibeLab client whose HTTP methods return fake responses."""
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.session import VibeLab
 
         client = VibeLab()
         client.get = MagicMock(return_value=_fake_response(json_data, status_code))
@@ -159,7 +159,7 @@ class TestProjects(unittest.TestCase):
 
     def test_list_projects_returns_list(self):
         """list_projects() should return the list of project dicts."""
-        from cli_anything.vibelab.core.projects import list_projects
+        from cli_anything.drclaw.core.projects import list_projects
 
         projects = [
             {"id": "p1", "display_name": "Alpha"},
@@ -172,7 +172,7 @@ class TestProjects(unittest.TestCase):
 
     def test_list_projects_unwraps_dict(self):
         """list_projects() handles a server response wrapped in {projects: [...]}."""
-        from cli_anything.vibelab.core.projects import list_projects
+        from cli_anything.drclaw.core.projects import list_projects
 
         wrapped = {"projects": [{"id": "p3", "display_name": "Gamma"}]}
         client = self._make_client(wrapped)
@@ -181,7 +181,7 @@ class TestProjects(unittest.TestCase):
 
     def test_rename_project_calls_put(self):
         """rename_project() should PUT the correct URL and payload."""
-        from cli_anything.vibelab.core.projects import rename_project
+        from cli_anything.drclaw.core.projects import rename_project
 
         client = self._make_client({})
         rename_project(client, "proj-abc", "New Name")
@@ -191,7 +191,7 @@ class TestProjects(unittest.TestCase):
 
     def test_add_project_manual_calls_create_endpoint(self):
         """add_project_manual() should POST to the supported create-project route."""
-        from cli_anything.vibelab.core.projects import add_project_manual
+        from cli_anything.drclaw.core.projects import add_project_manual
 
         client = self._make_client({})
         result = add_project_manual(client, "/tmp/demo", display_name="Demo")
@@ -202,7 +202,7 @@ class TestProjects(unittest.TestCase):
 
     def test_delete_project_calls_delete(self):
         """delete_project() should DELETE the correct URL."""
-        from cli_anything.vibelab.core.projects import delete_project
+        from cli_anything.drclaw.core.projects import delete_project
 
         client = self._make_client({})
         result = delete_project(client, "proj-abc")
@@ -211,7 +211,7 @@ class TestProjects(unittest.TestCase):
 
     def test_create_project_workspace_calls_create_workspace_endpoint(self):
         """create_project_workspace() should POST to the new-workspace endpoint."""
-        from cli_anything.vibelab.core.projects import create_project_workspace
+        from cli_anything.drclaw.core.projects import create_project_workspace
 
         client = self._make_client({})
         result = create_project_workspace(client, "/tmp/new-proj", display_name="New Proj")
@@ -223,7 +223,7 @@ class TestProjects(unittest.TestCase):
 
     def test_create_project_workspace_passes_github_url(self):
         """create_project_workspace() should forward an optional github URL."""
-        from cli_anything.vibelab.core.projects import create_project_workspace
+        from cli_anything.drclaw.core.projects import create_project_workspace
 
         client = self._make_client({})
         create_project_workspace(
@@ -246,7 +246,7 @@ class TestDigests(unittest.TestCase):
 
     def _make_client(self, json_data, status_code=200):
         """Return a VibeLab client whose HTTP methods return fake responses."""
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.session import VibeLab
 
         client = VibeLab()
         client.get = MagicMock(return_value=_fake_response(json_data, status_code))
@@ -256,7 +256,7 @@ class TestDigests(unittest.TestCase):
         return client
 
     def test_build_portfolio_digest_recommends_waiting_project(self):
-        from cli_anything.vibelab.vibelab_cli import _build_portfolio_digest
+        from cli_anything.drclaw.drclaw_cli import _build_portfolio_digest
 
         items = [
             {
@@ -285,7 +285,7 @@ class TestDigests(unittest.TestCase):
 
     def test_get_project_latest_message_picks_latest_session(self):
         """get_project_latest_message() should return the newest session snapshot."""
-        from cli_anything.vibelab.core.projects import get_project_latest_message
+        from cli_anything.drclaw.core.projects import get_project_latest_message
 
         client = self._make_client({})
         project = {
@@ -312,7 +312,7 @@ class TestDigests(unittest.TestCase):
 
     def test_get_project_latest_message_filters_provider(self):
         """get_project_latest_message() should respect an optional provider filter."""
-        from cli_anything.vibelab.core.projects import get_project_latest_message
+        from cli_anything.drclaw.core.projects import get_project_latest_message
 
         client = self._make_client({})
         project = {
@@ -336,8 +336,8 @@ class TestConversations(unittest.TestCase):
 
     def test_list_sessions_returns_page(self):
         """list_sessions() should call the project-scoped endpoint and preserve pagination metadata."""
-        from cli_anything.vibelab.core.conversations import list_sessions
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.conversations import list_sessions
+        from cli_anything.drclaw.core.session import VibeLab
 
         payload = {"sessions": [{"id": "s1", "title": "First session"}], "total": 1, "hasMore": False}
         client = VibeLab()
@@ -353,8 +353,8 @@ class TestConversations(unittest.TestCase):
 
     def test_get_session_messages_returns_messages(self):
         """get_session_messages() should unwrap messages and pass provider pagination params."""
-        from cli_anything.vibelab.core.conversations import get_session_messages
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.conversations import get_session_messages
+        from cli_anything.drclaw.core.session import VibeLab
 
         payload = {
             "messages": [
@@ -392,8 +392,8 @@ class TestTaskMaster(unittest.TestCase):
 
     def test_get_summary_hits_server_summary_endpoint(self):
         """get_summary() should call the dedicated summary endpoint."""
-        from cli_anything.vibelab.core.session import VibeLab
-        from cli_anything.vibelab.core.taskmaster import get_summary
+        from cli_anything.drclaw.core.session import VibeLab
+        from cli_anything.drclaw.core.taskmaster import get_summary
 
         client = VibeLab()
         client.get = MagicMock(return_value=_fake_response({"project": "proj-123", "status": "taskmaster-only"}))
@@ -406,8 +406,8 @@ class TestTaskMaster(unittest.TestCase):
         """build_summary() should compute a stable summary if the server summary route is unavailable."""
         from requests import HTTPError
 
-        from cli_anything.vibelab.core.session import VibeLab
-        from cli_anything.vibelab.core.taskmaster import build_summary
+        from cli_anything.drclaw.core.session import VibeLab
+        from cli_anything.drclaw.core.taskmaster import build_summary
 
         client = VibeLab()
 
@@ -462,8 +462,8 @@ class TestTaskMaster(unittest.TestCase):
 class TestChat(unittest.TestCase):
 
     def test_get_active_sessions_normalizes_provider_metadata(self):
-        from cli_anything.vibelab.core.chat import get_active_sessions
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.chat import get_active_sessions
+        from cli_anything.drclaw.core.session import VibeLab
 
         client = VibeLab()
         client.get = MagicMock(return_value=_fake_response({
@@ -488,8 +488,8 @@ class TestChat(unittest.TestCase):
         self.assertEqual(sessions[1]["summary"], "Cursor title")
 
     def test_get_processing_sessions_maps_server_active_sessions(self):
-        from cli_anything.vibelab.core.chat import get_processing_sessions
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.chat import get_processing_sessions
+        from cli_anything.drclaw.core.session import VibeLab
 
         client = VibeLab()
 
@@ -504,8 +504,8 @@ class TestChat(unittest.TestCase):
             }
         ]
 
-        with patch("cli_anything.vibelab.core.chat.get_active_sessions", return_value=known_sessions), patch(
-            "cli_anything.vibelab.core.chat._ws_request",
+        with patch("cli_anything.drclaw.core.chat.get_active_sessions", return_value=known_sessions), patch(
+            "cli_anything.drclaw.core.chat._ws_request",
             return_value={
                 "type": "active-sessions",
                 "sessions": {
@@ -525,12 +525,12 @@ class TestChat(unittest.TestCase):
         self.assertEqual(rows[1]["status"], "waiting_for_response")
 
     def test_check_session_status_uses_websocket_request(self):
-        from cli_anything.vibelab.core.chat import check_session_status
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.chat import check_session_status
+        from cli_anything.drclaw.core.session import VibeLab
 
         client = VibeLab()
         with patch(
-            "cli_anything.vibelab.core.chat._ws_request",
+            "cli_anything.drclaw.core.chat._ws_request",
             return_value={"type": "session-status", "sessionId": "sess-1", "provider": "codex", "isProcessing": True},
         ) as ws_request:
             result = check_session_status(client, "sess-1", provider="codex")
@@ -543,12 +543,12 @@ class TestChat(unittest.TestCase):
         self.assertTrue(result["isProcessing"])
 
     def test_get_waiting_sessions_compact_returns_stable_schema(self):
-        from cli_anything.vibelab.core.chat import get_waiting_sessions_compact
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.core.chat import get_waiting_sessions_compact
+        from cli_anything.drclaw.core.session import VibeLab
 
         client = VibeLab()
         with patch(
-            "cli_anything.vibelab.core.chat.get_processing_sessions",
+            "cli_anything.drclaw.core.chat.get_processing_sessions",
             return_value=[
                 {
                     "project_name": "proj-1",
@@ -573,14 +573,14 @@ class TestChat(unittest.TestCase):
 class TestCliHelpers(unittest.TestCase):
 
     def test_resolve_session_provider_finds_unique_provider(self):
-        from cli_anything.vibelab.vibelab_cli import _resolve_session_provider
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.drclaw_cli import _resolve_session_provider
+        from cli_anything.drclaw.core.session import VibeLab
 
         client = VibeLab()
         project = {"name": "proj-1", "displayName": "Project One", "fullPath": "/tmp/proj-1"}
 
         with patch(
-            "cli_anything.vibelab.vibelab_cli.chat_mod.get_active_sessions",
+            "cli_anything.drclaw.drclaw_cli.chat_mod.get_active_sessions",
             return_value=[
                 {"project_name": "proj-1", "provider": "codex", "session_id": "sess-1"},
                 {"project_name": "proj-1", "provider": "claude", "session_id": "sess-2"},
@@ -591,21 +591,21 @@ class TestCliHelpers(unittest.TestCase):
         self.assertEqual(provider, "codex")
 
     def test_resolve_session_provider_raises_when_missing(self):
-        from cli_anything.vibelab.vibelab_cli import _resolve_session_provider
-        from cli_anything.vibelab.core.session import VibeLab
+        from cli_anything.drclaw.drclaw_cli import _resolve_session_provider
+        from cli_anything.drclaw.core.session import VibeLab
 
         client = VibeLab()
         project = {"name": "proj-1", "displayName": "Project One", "fullPath": "/tmp/proj-1"}
 
         with patch(
-            "cli_anything.vibelab.vibelab_cli.chat_mod.get_active_sessions",
+            "cli_anything.drclaw.drclaw_cli.chat_mod.get_active_sessions",
             return_value=[],
         ):
             with self.assertRaises(ValueError):
                 _resolve_session_provider(client, project, "missing-session")
 
     def test_maybe_send_openclaw_chat_notification_disabled(self):
-        from cli_anything.vibelab.vibelab_cli import _maybe_send_openclaw_chat_notification
+        from cli_anything.drclaw.drclaw_cli import _maybe_send_openclaw_chat_notification
 
         result = _maybe_send_openclaw_chat_notification(
             {"project": "proj-1", "provider": "claude", "session_id": "sess-1", "reply": "done"},
@@ -618,13 +618,13 @@ class TestCliHelpers(unittest.TestCase):
         self.assertFalse(result["sent"])
 
     def test_maybe_send_openclaw_chat_notification_sends_message(self):
-        from cli_anything.vibelab.vibelab_cli import _maybe_send_openclaw_chat_notification
+        from cli_anything.drclaw.drclaw_cli import _maybe_send_openclaw_chat_notification
 
         with patch(
-            "cli_anything.vibelab.vibelab_cli._resolve_push_channel",
+            "cli_anything.drclaw.drclaw_cli._resolve_push_channel",
             return_value="feishu:test",
         ), patch(
-            "cli_anything.vibelab.vibelab_cli._send_openclaw_message",
+            "cli_anything.drclaw.drclaw_cli._send_openclaw_message",
             return_value="ok",
         ) as send_message:
             result = _maybe_send_openclaw_chat_notification(
@@ -645,7 +645,7 @@ class TestCliHelpers(unittest.TestCase):
         send_message.assert_called_once()
 
     def test_install_openclaw_skill_copies_skill_tree_and_updates_session(self):
-        from cli_anything.vibelab.vibelab_cli import _install_openclaw_skill
+        from cli_anything.drclaw.drclaw_cli import _install_openclaw_skill
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -660,12 +660,12 @@ class TestCliHelpers(unittest.TestCase):
             waiter = scripts_dir / "drclaw_wait_until_clear.sh"
             waiter.write_text("#!/bin/sh\nexit 0\n")
 
-            with patch("cli_anything.vibelab.vibelab_cli._OPENCLAW_SKILL_SOURCE_DIR", source_dir), patch(
-                "cli_anything.vibelab.vibelab_cli.SESSION_FILE", session_file
+            with patch("cli_anything.drclaw.drclaw_cli._OPENCLAW_SKILL_SOURCE_DIR", source_dir), patch(
+                "cli_anything.drclaw.drclaw_cli.SESSION_FILE", session_file
             ), patch(
-                "cli_anything.vibelab.core.session.SESSION_FILE", session_file
+                "cli_anything.drclaw.core.session.SESSION_FILE", session_file
             ), patch(
-                "cli_anything.vibelab.vibelab_cli._resolve_current_drclaw_bin",
+                "cli_anything.drclaw.drclaw_cli._resolve_current_drclaw_bin",
                 return_value="/tmp/bin/drclaw",
             ):
                 payload = _install_openclaw_skill(
@@ -688,7 +688,7 @@ class TestCliHelpers(unittest.TestCase):
             self.assertEqual(session_data["openclaw_drclaw_bin"], "/tmp/bin/drclaw")
 
     def test_build_artifact_brief_compacts_server_payload(self):
-        from cli_anything.vibelab.vibelab_cli import _build_artifact_brief
+        from cli_anything.drclaw.drclaw_cli import _build_artifact_brief
 
         brief = _build_artifact_brief(
             {
@@ -708,7 +708,7 @@ class TestCliHelpers(unittest.TestCase):
         self.assertEqual(len(brief["artifacts"]), 2)
 
     def test_build_daily_digest_aggregates_counts(self):
-        from cli_anything.vibelab.vibelab_cli import _build_daily_digest
+        from cli_anything.drclaw.drclaw_cli import _build_daily_digest
 
         digest = _build_daily_digest(
             [
@@ -742,7 +742,7 @@ class TestOutput(unittest.TestCase):
 
     def test_output_json_mode_list(self):
         """output() with json_mode=True emits valid JSON."""
-        from cli_anything.vibelab.utils.output import output
+        from cli_anything.drclaw.utils.output import output
 
         data = [{"id": 1, "name": "foo"}, {"id": 2, "name": "bar"}]
         stdout, _ = self._capture(output, data, json_mode=True)
@@ -752,7 +752,7 @@ class TestOutput(unittest.TestCase):
 
     def test_output_pretty_mode_list_of_dicts(self):
         """output() in pretty mode renders column headers."""
-        from cli_anything.vibelab.utils.output import output
+        from cli_anything.drclaw.utils.output import output
 
         data = [{"id": "1", "name": "Alpha"}]
         stdout, _ = self._capture(output, data, json_mode=False)
@@ -761,14 +761,14 @@ class TestOutput(unittest.TestCase):
 
     def test_output_empty_list(self):
         """output() handles an empty list without crashing."""
-        from cli_anything.vibelab.utils.output import output
+        from cli_anything.drclaw.utils.output import output
 
         stdout, _ = self._capture(output, [], json_mode=False)
         self.assertIn("no items", stdout)
 
     def test_success_json_mode(self):
         """success() in JSON mode emits {status: ok, ...}."""
-        from cli_anything.vibelab.utils.output import success
+        from cli_anything.drclaw.utils.output import success
 
         stdout, _ = self._capture(success, "Done!", True)
         parsed = json.loads(stdout.strip())
@@ -777,7 +777,7 @@ class TestOutput(unittest.TestCase):
 
     def test_error_goes_to_stderr(self):
         """error() always writes to stderr."""
-        from cli_anything.vibelab.utils.output import error
+        from cli_anything.drclaw.utils.output import error
 
         stdout, stderr = self._capture(error, "Something went wrong")
         self.assertEqual(stdout, "")
@@ -785,7 +785,7 @@ class TestOutput(unittest.TestCase):
 
     def test_info_goes_to_stderr(self):
         """info() writes to stderr, not stdout."""
-        from cli_anything.vibelab.utils.output import info
+        from cli_anything.drclaw.utils.output import info
 
         stdout, stderr = self._capture(info, "Just a heads-up")
         self.assertEqual(stdout, "")
@@ -793,7 +793,7 @@ class TestOutput(unittest.TestCase):
 
     def test_output_json_mode_dict(self):
         """output() with a dict in JSON mode emits the dict as JSON."""
-        from cli_anything.vibelab.utils.output import output
+        from cli_anything.drclaw.utils.output import output
 
         data = {"needsSetup": False, "isAuthenticated": False}
         stdout, _ = self._capture(output, data, json_mode=True)

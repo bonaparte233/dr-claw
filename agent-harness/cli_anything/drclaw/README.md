@@ -56,7 +56,7 @@ Then authenticate:
 drclaw auth login --username <username> --password <password>
 ```
 
-The token is stored in `~/.vibelab_session.json`.
+The token is stored in `~/.vibelab_session.json`. If that file only contains OpenClaw integration fields and no `token`, authenticated commands like `projects list` and `chat waiting` will return `Not logged in`.
 
 ## Quick start
 
@@ -319,9 +319,9 @@ The `--url URL` flag overrides `VIBELAB_URL` for a single invocation.
 ## Running tests
 
 ```bash
-python3 -m pytest agent-harness/cli_anything/vibelab/tests/test_core.py -q
-PYTHONPATH=agent-harness python3 -m cli_anything.vibelab.vibelab_cli --help
-PYTHONPATH=agent-harness python3 -m cli_anything.vibelab.vibelab_cli chat waiting --help
-PYTHONPATH=agent-harness python3 -m cli_anything.vibelab.vibelab_cli digest portfolio --help
-PYTHONPATH=agent-harness python3 -m cli_anything.vibelab.vibelab_cli workflow continue --help
+python3 -m pytest agent-harness/cli_anything/drclaw/tests/test_core.py -q
+PYTHONPATH=agent-harness python3 -m cli_anything.drclaw.drclaw_cli --help
+PYTHONPATH=agent-harness python3 -m cli_anything.drclaw.drclaw_cli chat waiting --help
+PYTHONPATH=agent-harness python3 -m cli_anything.drclaw.drclaw_cli digest portfolio --help
+PYTHONPATH=agent-harness python3 -m cli_anything.drclaw.drclaw_cli workflow continue --help
 ```

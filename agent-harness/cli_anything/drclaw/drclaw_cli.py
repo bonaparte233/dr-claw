@@ -1,7 +1,7 @@
 """
 drclaw - CLI harness for the Dr. Claw / VibeLab research workspace.
 
-Entry point: cli_anything.vibelab.vibelab_cli:cli
+Entry point: cli_anything.drclaw.drclaw_cli:cli
 
 Usage overview:
   drclaw [--json] [--url URL] <command> [<subcommand>] [options]
@@ -407,7 +407,8 @@ def _resolve_session_provider(
 def _resolve_push_channel(channel: Optional[str]) -> Optional[str]:
     if channel:
         return channel
-    session_data = _load_session_file()
+    session_file = SESSION_FILE
+    session_data = _load_session_file(session_file)
     return session_data.get("openclaw_push_channel")
 
 
@@ -477,14 +478,15 @@ def _install_openclaw_skill(
     if resolved_server_url:
         resolved_server_url = resolved_server_url.rstrip("/")
 
-    session_data = _load_session_file()
+    session_file = SESSION_FILE
+    session_data = _load_session_file(session_file)
     if resolved_server_url:
         session_data["base_url"] = resolved_server_url
     if push_channel:
         session_data["openclaw_push_channel"] = push_channel
     session_data["openclaw_skill_dir"] = str(skill_dest)
     session_data["openclaw_drclaw_bin"] = _resolve_current_drclaw_bin()
-    _save_session_file(session_data)
+    _save_session_file(session_data, session_file)
 
     return {
         "openclaw_dir": str(base),
@@ -2295,7 +2297,8 @@ def openclaw_push(ctx: Context, message_text: str, channel: Optional[str]) -> No
 @pass_context
 def openclaw_configure(ctx: Context, push_channel: str) -> None:
     """Save OpenClaw integration settings to ~/.vibelab_session.json."""
-    session_data = _load_session_file()
+    session_file = SESSION_FILE
+    session_data = _load_session_file(session_file)
     session_data["openclaw_push_channel"] = push_channel
     _save_session_file(session_data)
     if ctx.json_mode:

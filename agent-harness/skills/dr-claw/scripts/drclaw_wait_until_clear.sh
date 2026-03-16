@@ -5,6 +5,15 @@ PROJECT=""
 SESSION_ID=""
 TIMEOUT=180
 INTERVAL=5
+DRCLAW_BIN="${DRCLAW_BIN:-drclaw}"
+
+if ! command -v "$DRCLAW_BIN" >/dev/null 2>&1; then
+  DRCLAW_BIN="dr-claw"
+fi
+
+if ! command -v "$DRCLAW_BIN" >/dev/null 2>&1; then
+  DRCLAW_BIN="vibelab"
+fi
 
 json_string() {
   printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
@@ -43,7 +52,7 @@ POLLS=0
 LAST_WAITING='[]'
 
 while :; do
-  LAST_WAITING=$(vibelab chat waiting --project "$PROJECT" --json 2>/dev/null || printf '[]')
+  LAST_WAITING=$($DRCLAW_BIN chat waiting --project "$PROJECT" --json 2>/dev/null || printf '[]')
   POLLS=$((POLLS + 1))
   ELAPSED=$(( $(date +%s) - START_TS ))
 

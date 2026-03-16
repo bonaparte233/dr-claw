@@ -1,26 +1,26 @@
-# VibeLab CLI Harness - Standard Operating Procedure
+# Dr. Claw CLI Harness - Standard Operating Procedure
 
 ## Overview
 
-VibeLab, now also branded as Dr. Claw, is a full-stack AI research workspace for managing multi-provider coding and research sessions. The Python `vibelab` CLI exposes the same server capabilities for automation, OpenClaw integration, and mobile status reporting.
+VibeLab, now also branded as Dr. Claw, is a full-stack AI research workspace for managing multi-provider coding and research sessions. The Python `drclaw` CLI exposes the same server capabilities for automation, OpenClaw integration, and mobile status reporting.
 
 ## Core workflows
 
 ### Authentication
 
 ```bash
-vibelab auth status
-vibelab auth login --username admin --password s3cr3t
-vibelab auth logout
+drclaw auth status
+drclaw auth login --username admin --password s3cr3t
+drclaw auth logout
 ```
 
 ### Projects
 
 ```bash
-vibelab projects list
-vibelab projects add /absolute/path/to/project --name "My Project"
-vibelab projects rename <project-ref> "New Display Name"
-vibelab projects delete <project-ref>
+drclaw projects list
+drclaw projects add /absolute/path/to/project --name "My Project"
+drclaw projects rename <project-ref> "New Display Name"
+drclaw projects delete <project-ref>
 ```
 
 `<project-ref>` may be a project `name`, `displayName`, or filesystem path.
@@ -28,12 +28,12 @@ vibelab projects delete <project-ref>
 ### Sessions and chat
 
 ```bash
-vibelab sessions list <project-ref>
-vibelab sessions list <project-ref> --provider cursor --limit 20 --offset 0
-vibelab sessions messages <project-ref> <session-id> --provider claude --limit 100
-vibelab chat sessions --project <project-ref>
-vibelab chat send --project <project-ref> --message "What changed?"
-vibelab chat send --project <project-ref> --session <session-id> --message "Continue"
+drclaw sessions list <project-ref>
+drclaw sessions list <project-ref> --provider cursor --limit 20 --offset 0
+drclaw sessions messages <project-ref> <session-id> --provider claude --limit 100
+drclaw chat sessions --project <project-ref>
+drclaw chat send --project <project-ref> --message "What changed?"
+drclaw chat send --project <project-ref> --session <session-id> --message "Continue"
 ```
 
 `chat send` resolves the project reference to a real filesystem path before opening the websocket, and waits for explicit completion events instead of using a silence timeout.
@@ -41,14 +41,14 @@ vibelab chat send --project <project-ref> --session <session-id> --message "Cont
 ### TaskMaster / pipeline progress
 
 ```bash
-vibelab taskmaster status
-vibelab taskmaster detect <project-ref>
-vibelab taskmaster detect-all
-vibelab taskmaster init <project-ref>
-vibelab taskmaster tasks <project-ref>
-vibelab taskmaster next <project-ref>
-vibelab taskmaster next-guidance <project-ref>
-vibelab taskmaster summary <project-ref>
+drclaw taskmaster status
+drclaw taskmaster detect <project-ref>
+drclaw taskmaster detect-all
+drclaw taskmaster init <project-ref>
+drclaw taskmaster tasks <project-ref>
+drclaw taskmaster next <project-ref>
+drclaw taskmaster next-guidance <project-ref>
+drclaw taskmaster summary <project-ref>
 ```
 
 The server now also exposes a dedicated summary route, so OpenClaw and other agents can fetch one stable progress payload instead of stitching together multiple endpoints.
@@ -56,10 +56,10 @@ The server now also exposes a dedicated summary route, so OpenClaw and other age
 ### OpenClaw / mobile reporting
 
 ```bash
-vibelab openclaw install
-vibelab openclaw configure --push-channel feishu:<chat_id>
-vibelab openclaw report --project <project-ref> --dry-run
-vibelab openclaw report --project <project-ref>
+drclaw openclaw install
+drclaw openclaw configure --push-channel feishu:<chat_id>
+drclaw openclaw report --project <project-ref> --dry-run
+drclaw openclaw report --project <project-ref>
 ```
 
 `openclaw report` generates a concise status digest with counts, next task, required inputs, suggested skills, and optional next-action prompt text.
@@ -88,8 +88,8 @@ Important server routes used by the CLI:
 Use `--json` whenever OpenClaw or another agent needs machine-readable output:
 
 ```bash
-vibelab --json projects list
-vibelab --json sessions list <project-ref> --provider codex
-vibelab --json taskmaster summary <project-ref>
-vibelab --json openclaw report --project <project-ref> --dry-run
+drclaw --json projects list
+drclaw --json sessions list <project-ref> --provider codex
+drclaw --json taskmaster summary <project-ref>
+drclaw --json openclaw report --project <project-ref> --dry-run
 ```

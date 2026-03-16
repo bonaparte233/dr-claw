@@ -1,6 +1,6 @@
 ---
 name: dr-claw
-description: Dr. Claw skill for OpenClaw project discovery, idea intake, waiting-session triage, session replies, workflow control, and mobile reporting through the local vibelab CLI.
+description: Dr. Claw skill for OpenClaw project discovery, idea intake, waiting-session triage, session replies, workflow control, and mobile reporting through the local drclaw CLI.
 ---
 
 # Dr. Claw for OpenClaw
@@ -15,17 +15,26 @@ Use this skill when OpenClaw needs to operate Dr. Claw from chat or mobile, espe
 
 ## Preconditions
 
-Before running VibeLab commands:
+Before running Dr. Claw commands:
 
 ```bash
-vibelab server status
+$DRCLAW_BIN server status
 ```
 
 If the server is not running:
 
 ```bash
-vibelab server on
+$DRCLAW_BIN server on
 ```
+
+Assume the local wrapper exports these defaults when OpenClaw runs the skill:
+
+```bash
+DRCLAW_BIN=/Users/david/Library/Python/3.9/bin/drclaw
+VIBELAB_URL=http://localhost:3001
+```
+
+When invoking the CLI from OpenClaw, prefer `$DRCLAW_BIN --url "$VIBELAB_URL" ...` instead of relying on PATH.
 
 ## Core operating rule
 
@@ -34,7 +43,7 @@ Prefer direct CLI facts over model guesses. For stateful operations, return the 
 When calling OpenClaw locally from automation or shell, use:
 
 ```bash
-./scripts/openclaw_vibelab_turn.sh
+./scripts/openclaw_drclaw_turn.sh
 ```
 
 This serializes `openclaw agent --local` calls per agent and avoids session-lock collisions.
@@ -44,31 +53,31 @@ This serializes `openclaw agent --local` calls per agent and avoids session-lock
 List projects:
 
 ```bash
-vibelab projects list
+$DRCLAW_BIN --url "$VIBELAB_URL" projects list
 ```
 
 Inspect the latest message in a project:
 
 ```bash
-vibelab projects latest <project> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" projects latest <project> --json
 ```
 
 Inspect project progress and next actions:
 
 ```bash
-vibelab projects progress <project> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" projects progress <project> --json
 ```
 
 Create a new empty project workspace:
 
 ```bash
-vibelab projects create /absolute/path/to/project --name "Display Name" --json
+$DRCLAW_BIN --url "$VIBELAB_URL" projects create /absolute/path/to/project --name "Display Name" --json
 ```
 
 Create a new project from a fresh idea and immediately start discussion:
 
 ```bash
-vibelab projects idea /absolute/path/to/project --name "Display Name" --idea "<idea text>" --json
+$DRCLAW_BIN --url "$VIBELAB_URL" projects idea /absolute/path/to/project --name "Display Name" --idea "<idea text>" --json
 ```
 
 Use `projects idea` for the “I suddenly have an idea” flow.
@@ -78,14 +87,14 @@ Use `projects idea` for the “I suddenly have an idea” flow.
 List known sessions for one project:
 
 ```bash
-vibelab chat sessions --project <project> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" chat sessions --project <project> --json
 ```
 
 List waiting sessions across all projects or one project:
 
 ```bash
-vibelab chat waiting --json
-vibelab chat waiting --project <project> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" chat waiting --json
+$DRCLAW_BIN --url "$VIBELAB_URL" chat waiting --project <project> --json
 ```
 
 Recommended triage flow:
@@ -98,7 +107,7 @@ Recommended triage flow:
 Once the user chooses a session:
 
 ```bash
-vibelab chat reply --project <project> --session <session-id> -m "<message>" --json
+$DRCLAW_BIN --url "$VIBELAB_URL" chat reply --project <project> --session <session-id> -m "<message>" --json
 ```
 
 Do not ask for provider. `chat reply` derives the provider from the stored session.
@@ -106,13 +115,13 @@ Do not ask for provider. `chat reply` derives the provider from the stored sessi
 Immediately after replying, check whether the session is still processing:
 
 ```bash
-vibelab chat waiting --project <project> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" chat waiting --project <project> --json
 ```
 
 If you need to wait until the session leaves the waiting list, use:
 
 ```bash
-./scripts/vibelab_wait_until_clear.sh --project <project> --session <session-id>
+./scripts/drclaw_wait_until_clear.sh --project <project> --session <session-id>
 ```
 
 The script returns JSON indicating whether the session cleared or timed out.
@@ -122,12 +131,12 @@ The script returns JSON indicating whether the session cleared or timed out.
 Use these commands for workflow actions:
 
 ```bash
-vibelab workflow status --project <project> --json
-vibelab workflow continue --project <project> --session <session-id> -m "<instruction>" --json
-vibelab workflow approve --project <project> --session <session-id> --json
-vibelab workflow reject --project <project> --session <session-id> -m "<reason>" --json
-vibelab workflow retry --project <project> --session <session-id> --json
-vibelab workflow resume --project <project> --session <session-id> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" workflow status --project <project> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" workflow continue --project <project> --session <session-id> -m "<instruction>" --json
+$DRCLAW_BIN --url "$VIBELAB_URL" workflow approve --project <project> --session <session-id> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" workflow reject --project <project> --session <session-id> -m "<reason>" --json
+$DRCLAW_BIN --url "$VIBELAB_URL" workflow retry --project <project> --session <session-id> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" workflow resume --project <project> --session <session-id> --json
 ```
 
 ## Digests and reporting
@@ -135,26 +144,26 @@ vibelab workflow resume --project <project> --session <session-id> --json
 Daily digest:
 
 ```bash
-vibelab digest daily --json
+$DRCLAW_BIN --url "$VIBELAB_URL" digest daily --json
 ```
 
 Per-project digest:
 
 ```bash
-vibelab digest project --project <project> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" digest project --project <project> --json
 ```
 
 Cross-project portfolio digest with recommended follow-ups:
 
 ```bash
-vibelab digest portfolio --json
+$DRCLAW_BIN --url "$VIBELAB_URL" digest portfolio --json
 ```
 
 Artifacts and workflow state:
 
 ```bash
-vibelab workflow status --project <project> --json
-vibelab taskmaster artifacts --project <project> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" workflow status --project <project> --json
+$DRCLAW_BIN --url "$VIBELAB_URL" taskmaster artifacts --project <project> --json
 ```
 
 ## Response format guidance for mobile / chat
@@ -168,27 +177,27 @@ Keep replies compact:
 ## Reliable OpenClaw patterns
 
 Pattern: list projects
-1. Run `vibelab projects list`.
+1. Run `$DRCLAW_BIN --url "$VIBELAB_URL" projects list`.
 2. Present short names, display names, and paths only when needed.
 
 Pattern: user asks what needs attention
-1. Run `vibelab chat waiting --json`.
+1. Run `$DRCLAW_BIN --url "$VIBELAB_URL" chat waiting --json`.
 2. Group by project.
 3. Present session id, provider, summary, and last activity.
 
 Pattern: user asks OpenClaw to answer a waiting session
-1. Run `vibelab chat reply --project ... --session ... -m ... --json`.
-2. Immediately run `vibelab chat waiting --project ... --json`.
+1. Run `$DRCLAW_BIN --url "$VIBELAB_URL" chat reply --project ... --session ... -m ... --json`.
+2. Immediately run `$DRCLAW_BIN --url "$VIBELAB_URL" chat waiting --project ... --json`.
 3. If the same session is still present, report that it is still processing.
-4. Optionally run `vibelab_wait_until_clear.sh` and report the final clearance.
+4. Optionally run `drclaw_wait_until_clear.sh` and report the final clearance.
 
 Pattern: user suddenly has a new idea
 1. Pick a workspace path, usually `/Users/<user>/vibelab/<slug>`.
-2. Run `vibelab projects idea <path> --name <display-name> --idea <idea> --json`.
-3. Return the created project, session id, and first VibeLab reply.
-4. Continue the discussion with `vibelab chat reply` on that session.
+2. Run `$DRCLAW_BIN --url "$VIBELAB_URL" projects idea <path> --name <display-name> --idea <idea> --json`.
+3. Return the created project, session id, and first Dr. Claw reply.
+4. Continue the discussion with `$DRCLAW_BIN --url "$VIBELAB_URL" chat reply` on that session.
 
-Pattern: user wants an update without opening VibeLab
-1. Run `vibelab digest daily --json`, `vibelab digest project --project ... --json`, or `vibelab digest portfolio --json`.
+Pattern: user wants an update without opening Dr. Claw
+1. Run `$DRCLAW_BIN --url "$VIBELAB_URL" digest daily --json`, `$DRCLAW_BIN --url "$VIBELAB_URL" digest project --project ... --json`, or `$DRCLAW_BIN --url "$VIBELAB_URL" digest portfolio --json`.
 2. Use `digest portfolio` when the user wants cross-project progress, attention recommendations, or suggested replies.
 3. Summarize only the load-bearing items: waiting sessions, task progress, blockers, next actions.

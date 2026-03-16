@@ -1,3 +1,3 @@
-"""cli_anything.vibelab — CLI harness for the VibeLab AI research workspace."""
+"""cli_anything.vibelab - legacy compatibility package for Dr. Claw CLI internals."""
 
 __version__ = "0.1.0"

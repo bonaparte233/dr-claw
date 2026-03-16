@@ -1,30 +1,30 @@
 ---
-name: vibelab
-description: VibeLab / Dr. Claw workspace skill for project lookup, session inspection, TaskMaster progress, and OpenClaw reporting
+name: drclaw
+description: Dr. Claw workspace skill for project lookup, session inspection, TaskMaster progress, and OpenClaw reporting
 ---
 
-# VibeLab Research Skill
+# Dr. Claw Research Skill
 
-Use this skill when the user asks about VibeLab or Dr. Claw projects, wants to inspect Claude/Cursor/Codex/Gemini sessions, or needs task progress pushed to OpenClaw/mobile.
+Use this skill when the user asks about Dr. Claw projects, wants to inspect Claude/Cursor/Codex/Gemini sessions, or needs task progress pushed to OpenClaw/mobile.
 
 ## Setup check
 
-Before using VibeLab, verify the server is reachable:
+Before using Dr. Claw, verify the server is reachable:
 
 ```bash
-vibelab server status
+drclaw server status
 ```
 
 If needed, start it:
 
 ```bash
-vibelab server on
+drclaw server on
 ```
 
 ## Project discovery
 
 ```bash
-vibelab --json projects list
+drclaw --json projects list
 ```
 
 Project references accepted by the CLI:
@@ -36,7 +36,7 @@ Project references accepted by the CLI:
 If a path exists locally but is not registered yet:
 
 ```bash
-vibelab projects add /absolute/path/to/project --name "Display Name"
+drclaw projects add /absolute/path/to/project --name "Display Name"
 ```
 
 ## Session workflows
@@ -44,26 +44,26 @@ vibelab projects add /absolute/path/to/project --name "Display Name"
 List sessions:
 
 ```bash
-vibelab --json sessions list <project-ref>
-vibelab --json sessions list <project-ref> --provider cursor
+drclaw --json sessions list <project-ref>
+drclaw --json sessions list <project-ref> --provider cursor
 ```
 
 Fetch messages:
 
 ```bash
-vibelab --json sessions messages <project-ref> <session-id> --provider claude --limit 100
+drclaw --json sessions messages <project-ref> <session-id> --provider claude --limit 100
 ```
 
 Send Claude a message:
 
 ```bash
-vibelab --json chat send --project <project-ref> --message "<user message>"
+drclaw --json chat send --project <project-ref> --message "<user message>"
 ```
 
 List active sessions across projects:
 
 ```bash
-vibelab --json chat sessions
+drclaw --json chat sessions
 ```
 
 ## TaskMaster workflows
@@ -71,20 +71,20 @@ vibelab --json chat sessions
 Check whether TaskMaster is present:
 
 ```bash
-vibelab --json taskmaster detect <project-ref>
+drclaw --json taskmaster detect <project-ref>
 ```
 
 Get progress and next action:
 
 ```bash
-vibelab --json taskmaster summary <project-ref>
-vibelab --json taskmaster next-guidance <project-ref>
+drclaw --json taskmaster summary <project-ref>
+drclaw --json taskmaster next-guidance <project-ref>
 ```
 
 Initialize `.pipeline` for a project if needed:
 
 ```bash
-vibelab taskmaster init <project-ref>
+drclaw taskmaster init <project-ref>
 ```
 
 ## OpenClaw / mobile reporting
@@ -92,19 +92,19 @@ vibelab taskmaster init <project-ref>
 Configure the default push channel once:
 
 ```bash
-vibelab openclaw configure --push-channel feishu:<chat_id>
+drclaw openclaw configure --push-channel feishu:<chat_id>
 ```
 
 Preview a mobile report:
 
 ```bash
-vibelab --json openclaw report --project <project-ref> --dry-run
+drclaw --json openclaw report --project <project-ref> --dry-run
 ```
 
 Send it:
 
 ```bash
-vibelab openclaw report --project <project-ref>
+drclaw openclaw report --project <project-ref>
 ```
 
 ## Recommended operating flow

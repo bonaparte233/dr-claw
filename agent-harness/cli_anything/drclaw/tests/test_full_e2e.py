@@ -56,9 +56,9 @@ def _resolve_cli(name: str) -> str:
 
     # Try to find the entry-point module directly
     try:
-        spec = importlib.util.find_spec("cli_anything.vibelab.vibelab_cli")
+        spec = importlib.util.find_spec("cli_anything.drclaw.drclaw_cli")
         if spec is not None:
-            return f"{sys.executable} -m cli_anything.vibelab.vibelab_cli"
+            return f"{sys.executable} -m cli_anything.drclaw.drclaw_cli"
     except (ModuleNotFoundError, ValueError):
         pass
 
@@ -147,12 +147,12 @@ class TestLogin(unittest.TestCase):
         """VibeLab.login() should persist the token so get_token() finds it."""
         with tempfile.TemporaryDirectory() as tmpdir:
             session_file = os.path.join(tmpdir, ".vibelab_session.json")
-            import cli_anything.vibelab.core.session as session_mod
+            import cli_anything.drclaw.core.session as session_mod
             original_path = session_mod.SESSION_FILE
             try:
                 from pathlib import Path
                 session_mod.SESSION_FILE = Path(session_file)
-                from cli_anything.vibelab.core.session import VibeLab
+                from cli_anything.drclaw.core.session import VibeLab
                 client = VibeLab(url_override=BASE_URL)
                 result = client.login(E2E_USER, E2E_PASS)
                 self.assertIn("token", result)
@@ -193,13 +193,13 @@ class TestListProjects(unittest.TestCase):
         """list_projects() against the live server should return a list."""
         with tempfile.TemporaryDirectory() as tmpdir:
             session_file = os.path.join(tmpdir, ".vibelab_session.json")
-            import cli_anything.vibelab.core.session as session_mod
+            import cli_anything.drclaw.core.session as session_mod
             from pathlib import Path
             original_path = session_mod.SESSION_FILE
             try:
                 session_mod.SESSION_FILE = Path(session_file)
-                from cli_anything.vibelab.core.session import VibeLab
-                from cli_anything.vibelab.core.projects import list_projects
+                from cli_anything.drclaw.core.session import VibeLab
+                from cli_anything.drclaw.core.projects import list_projects
                 client = VibeLab(url_override=BASE_URL)
                 client.login(E2E_USER, E2E_PASS)
                 projects = list_projects(client)
