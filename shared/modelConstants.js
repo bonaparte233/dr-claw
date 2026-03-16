@@ -21,7 +21,7 @@ export const CLAUDE_MODELS = {
     { value: 'claude-opus-4-6', label: 'Opus 4.6' }
   ],
 
-  DEFAULT: (typeof process !== 'undefined' && process.env?.ANTHROPIC_MODEL) || 'opusplan'
+  DEFAULT: (typeof process !== 'undefined' && process.env?.ANTHROPIC_MODEL) || 'claude-opus-4-6'
 };
 
 /**
