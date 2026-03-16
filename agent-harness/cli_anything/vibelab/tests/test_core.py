@@ -209,6 +209,39 @@ class TestProjects(unittest.TestCase):
         client.delete.assert_called_once_with("/api/projects/proj-abc")
         self.assertTrue(result)
 
+    def test_create_project_workspace_calls_create_workspace_endpoint(self):
+        """create_project_workspace() should POST to the new-workspace endpoint."""
+        from cli_anything.vibelab.core.projects import create_project_workspace
+
+        client = self._make_client({})
+        result = create_project_workspace(client, "/tmp/new-proj", display_name="New Proj")
+        client.post.assert_called_once_with(
+            "/api/projects/create-workspace",
+            {"workspaceType": "new", "path": "/tmp/new-proj", "displayName": "New Proj"},
+        )
+        self.assertEqual(result["name"], "proj-abc")
+
+    def test_create_project_workspace_passes_github_url(self):
+        """create_project_workspace() should forward an optional github URL."""
+        from cli_anything.vibelab.core.projects import create_project_workspace
+
+        client = self._make_client({})
+        create_project_workspace(
+            client,
+            "/tmp/new-proj",
+            display_name="New Proj",
+            github_url="https://github.com/example/repo",
+        )
+        client.post.assert_called_once_with(
+            "/api/projects/create-workspace",
+            {
+                "workspaceType": "new",
+                "path": "/tmp/new-proj",
+                "displayName": "New Proj",
+                "githubUrl": "https://github.com/example/repo",
+            },
+        )
+
 
 # ---------------------------------------------------------------------------
 # conversations.py tests
@@ -335,6 +368,231 @@ class TestTaskMaster(unittest.TestCase):
         self.assertEqual(summary["counts"]["completion_rate"], 50.0)
         self.assertEqual(summary["next_task"]["id"], 2)
         self.assertEqual(summary["guidance"]["whyNext"], "Do this next")
+
+
+# ---------------------------------------------------------------------------
+# chat.py tests
+# ---------------------------------------------------------------------------
+
+class TestChat(unittest.TestCase):
+
+    def test_get_active_sessions_normalizes_provider_metadata(self):
+        from cli_anything.vibelab.core.chat import get_active_sessions
+        from cli_anything.vibelab.core.session import VibeLab
+
+        client = VibeLab()
+        client.get = MagicMock(return_value=_fake_response({
+            "projects": [
+                {
+                    "name": "proj-1",
+                    "displayName": "Project One",
+                    "fullPath": "/tmp/proj-1",
+                    "sessions": [{"id": "claude-1", "summary": "Claude summary"}],
+                    "cursorSessions": [{"sessionId": "cursor-1", "title": "Cursor title"}],
+                }
+            ]
+        }))
+
+        sessions = get_active_sessions(client)
+
+        self.assertEqual(len(sessions), 2)
+        self.assertEqual(sessions[0]["project_display_name"], "Project One")
+        self.assertEqual(sessions[0]["project_path"], "/tmp/proj-1")
+        self.assertEqual(sessions[1]["provider"], "cursor")
+        self.assertEqual(sessions[1]["session_id"], "cursor-1")
+        self.assertEqual(sessions[1]["summary"], "Cursor title")
+
+    def test_get_processing_sessions_maps_server_active_sessions(self):
+        from cli_anything.vibelab.core.chat import get_processing_sessions
+        from cli_anything.vibelab.core.session import VibeLab
+
+        client = VibeLab()
+
+        known_sessions = [
+            {
+                "provider": "claude",
+                "session_id": "claude-1",
+                "project_name": "proj-1",
+                "project_display_name": "Project One",
+                "project_path": "/tmp/proj-1",
+                "summary": "Needs reply",
+            }
+        ]
+
+        with patch("cli_anything.vibelab.core.chat.get_active_sessions", return_value=known_sessions), patch(
+            "cli_anything.vibelab.core.chat._ws_request",
+            return_value={
+                "type": "active-sessions",
+                "sessions": {
+                    "claude": ["claude-1"],
+                    "cursor": ["cursor-2"],
+                },
+            },
+        ):
+            rows = get_processing_sessions(client)
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["provider"], "cursor")
+        self.assertEqual(rows[0]["project_name"], None)
+        self.assertEqual(rows[1]["provider"], "claude")
+        self.assertEqual(rows[1]["project_name"], "proj-1")
+        self.assertTrue(rows[1]["is_processing"])
+        self.assertEqual(rows[1]["status"], "waiting_for_response")
+
+    def test_check_session_status_uses_websocket_request(self):
+        from cli_anything.vibelab.core.chat import check_session_status
+        from cli_anything.vibelab.core.session import VibeLab
+
+        client = VibeLab()
+        with patch(
+            "cli_anything.vibelab.core.chat._ws_request",
+            return_value={"type": "session-status", "sessionId": "sess-1", "provider": "codex", "isProcessing": True},
+        ) as ws_request:
+            result = check_session_status(client, "sess-1", provider="codex")
+
+        ws_request.assert_called_once_with(
+            client,
+            {"type": "check-session-status", "sessionId": "sess-1", "provider": "codex"},
+            expected_type="session-status",
+        )
+        self.assertTrue(result["isProcessing"])
+
+    def test_get_waiting_sessions_compact_returns_stable_schema(self):
+        from cli_anything.vibelab.core.chat import get_waiting_sessions_compact
+        from cli_anything.vibelab.core.session import VibeLab
+
+        client = VibeLab()
+        with patch(
+            "cli_anything.vibelab.core.chat.get_processing_sessions",
+            return_value=[
+                {
+                    "project_name": "proj-1",
+                    "project_display_name": "Project One",
+                    "project_path": "/tmp/proj-1",
+                    "provider": "claude",
+                    "session_id": "sess-1",
+                    "summary": "Need approval",
+                    "status": "waiting_for_response",
+                    "is_processing": True,
+                    "lastActivity": "2026-03-15T00:00:00Z",
+                }
+            ],
+        ):
+            rows = get_waiting_sessions_compact(client)
+
+        self.assertEqual(rows[0]["project"], "proj-1")
+        self.assertEqual(rows[0]["project_display_name"], "Project One")
+        self.assertEqual(rows[0]["last_activity"], "2026-03-15T00:00:00Z")
+
+
+class TestCliHelpers(unittest.TestCase):
+
+    def test_resolve_session_provider_finds_unique_provider(self):
+        from cli_anything.vibelab.vibelab_cli import _resolve_session_provider
+        from cli_anything.vibelab.core.session import VibeLab
+
+        client = VibeLab()
+        project = {"name": "proj-1", "displayName": "Project One", "fullPath": "/tmp/proj-1"}
+
+        with patch(
+            "cli_anything.vibelab.vibelab_cli.chat_mod.get_active_sessions",
+            return_value=[
+                {"project_name": "proj-1", "provider": "codex", "session_id": "sess-1"},
+                {"project_name": "proj-1", "provider": "claude", "session_id": "sess-2"},
+            ],
+        ):
+            provider = _resolve_session_provider(client, project, "sess-1")
+
+        self.assertEqual(provider, "codex")
+
+    def test_resolve_session_provider_raises_when_missing(self):
+        from cli_anything.vibelab.vibelab_cli import _resolve_session_provider
+        from cli_anything.vibelab.core.session import VibeLab
+
+        client = VibeLab()
+        project = {"name": "proj-1", "displayName": "Project One", "fullPath": "/tmp/proj-1"}
+
+        with patch(
+            "cli_anything.vibelab.vibelab_cli.chat_mod.get_active_sessions",
+            return_value=[],
+        ):
+            with self.assertRaises(ValueError):
+                _resolve_session_provider(client, project, "missing-session")
+
+    def test_maybe_send_openclaw_chat_notification_disabled(self):
+        from cli_anything.vibelab.vibelab_cli import _maybe_send_openclaw_chat_notification
+
+        result = _maybe_send_openclaw_chat_notification(
+            {"project": "proj-1", "provider": "claude", "session_id": "sess-1", "reply": "done"},
+            action="chat_reply",
+            notify_openclaw=False,
+            notify_channel=None,
+        )
+
+        self.assertFalse(result["enabled"])
+        self.assertFalse(result["sent"])
+
+    def test_maybe_send_openclaw_chat_notification_sends_message(self):
+        from cli_anything.vibelab.vibelab_cli import _maybe_send_openclaw_chat_notification
+
+        with patch(
+            "cli_anything.vibelab.vibelab_cli._resolve_push_channel",
+            return_value="feishu:test",
+        ), patch(
+            "cli_anything.vibelab.vibelab_cli._send_openclaw_message",
+            return_value="ok",
+        ) as send_message:
+            result = _maybe_send_openclaw_chat_notification(
+                {
+                    "project_display_name": "Project One",
+                    "provider": "claude",
+                    "session_id": "sess-1",
+                    "reply": "completed successfully",
+                },
+                action="chat_reply",
+                notify_openclaw=True,
+                notify_channel=None,
+            )
+
+        self.assertTrue(result["sent"])
+        self.assertEqual(result["channel"], "feishu:test")
+        self.assertIn("Project One", result["message"])
+        send_message.assert_called_once()
+
+    def test_build_artifact_brief_compacts_server_payload(self):
+        from cli_anything.vibelab.vibelab_cli import _build_artifact_brief
+
+        brief = _build_artifact_brief(
+            {
+                "projectName": "proj-1",
+                "projectPath": "/tmp/proj-1",
+                "totalArtifacts": 2,
+                "latestArtifact": {"relativePath": "results/metrics.json", "modified": "2026-03-15T00:00:00Z"},
+                "artifacts": [
+                    {"relativePath": "results/metrics.json", "category": "results", "modified": "2026-03-15T00:00:00Z"},
+                    {"relativePath": ".pipeline/docs/research_brief.json", "category": ".pipeline/docs", "modified": "2026-03-14T00:00:00Z"},
+                ],
+            }
+        )
+
+        self.assertEqual(brief["latest_artifact"], "results/metrics.json")
+        self.assertEqual(brief["artifact_count"], 2)
+        self.assertEqual(len(brief["artifacts"]), 2)
+
+    def test_build_daily_digest_aggregates_counts(self):
+        from cli_anything.vibelab.vibelab_cli import _build_daily_digest
+
+        digest = _build_daily_digest(
+            [
+                {"counts": {"total": 5, "completed": 2}, "waiting": [{}, {}]},
+                {"counts": {"total": 3, "completed": 1}, "waiting": [{}]},
+            ]
+        )
+
+        self.assertEqual(digest["summary"]["project_count"], 2)
+        self.assertEqual(digest["summary"]["waiting_sessions"], 3)
+        self.assertEqual(digest["summary"]["tasks_total"], 8)
+        self.assertEqual(digest["summary"]["tasks_completed"], 3)
 
 
 # ---------------------------------------------------------------------------

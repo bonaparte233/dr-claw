@@ -29,9 +29,15 @@ Sub-command tree:
     detect-all      Detect TaskMaster state across all projects
     init            Initialize .pipeline files for a project
     tasks           List project tasks
+    add-task        Add a task to a project workflow
+    update-task     Update a task in a project workflow
+    artifacts       Summarize recent project artifacts
     next            Show the next task
     next-guidance   Show next-task guidance metadata
     summary         Show a compact progress summary
+  digest
+    project         Send/print a project digest
+    daily           Send/print a multi-project digest
   settings
     api-keys
       list      List API keys
@@ -40,8 +46,11 @@ Sub-command tree:
   skills
     list        List global skills
   chat
-    send        Send a Claude message over WebSocket
-    sessions    List active sessions across projects
+    send        Send a provider message over WebSocket
+    reply       Reply to an existing session
+    sessions    List known sessions across projects
+    waiting     List sessions currently waiting for response
+    watch       Watch realtime session/task events
   openclaw
     install     Install the VibeLab skill into OpenClaw
     configure   Save the default push channel
@@ -340,6 +349,52 @@ def _list_provider_sessions_from_project(
     }
 
 
+def _resolve_session_provider(
+    client: VibeLab,
+    project: Dict[str, Any],
+    session_id: str,
+) -> str:
+    project_name = project.get("name")
+    project_path = project.get("fullPath") or project.get("path")
+
+    candidates: List[Dict[str, Any]] = []
+    for session in chat_mod.get_active_sessions(client):
+        same_project = (
+            session.get("project_name") == project_name
+            or session.get("project_path") == project_path
+        )
+        if not same_project:
+            continue
+
+        known_session_id = (
+            session.get("session_id")
+            or session.get("sessionId")
+            or session.get("id")
+        )
+        if known_session_id == session_id:
+            candidates.append(session)
+
+    providers = sorted(
+        {
+            _normalize_provider(session.get("provider"))
+            for session in candidates
+            if session.get("provider")
+        }
+    )
+
+    if len(providers) == 1:
+        return providers[0] or "claude"
+
+    if len(providers) > 1:
+        raise ValueError(
+            f"Session '{session_id}' is ambiguous in project '{_project_label(project)}'. Matching providers: {', '.join(providers)}"
+        )
+
+    raise ValueError(
+        f"Session '{session_id}' was not found in project '{_project_label(project)}'. Run `vibelab chat sessions --project \"{_project_label(project)}\"` or `vibelab chat waiting --project \"{_project_label(project)}\"` first."
+    )
+
+
 def _resolve_push_channel(channel: Optional[str]) -> Optional[str]:
     if channel:
         return channel
@@ -411,6 +466,162 @@ def _build_openclaw_report(
         lines.append(f"Updated: {updated_at}")
 
     return "\n".join(lines)
+
+
+def _build_openclaw_chat_notification(payload: Dict[str, Any], action: str) -> str:
+    project_name = payload.get("project_display_name") or payload.get("project") or payload.get("project_path") or "unknown"
+    provider = payload.get("provider") or "unknown"
+    session_id = payload.get("session_id") or ""
+    reply = _truncate_text(payload.get("reply") or "", 320)
+
+    lines = [f"[VibeLab] {project_name}"]
+    lines.append(f"Action: {action}")
+    lines.append(f"Provider: {provider}")
+    if session_id:
+        lines.append(f"Session: {session_id}")
+    if reply:
+        lines.append(f"Reply: {reply}")
+    else:
+        lines.append("Reply: (empty)")
+    return "\n".join(lines)
+
+
+def _compact_waiting_sessions(sessions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows = []
+    for session in sessions:
+        rows.append(
+            {
+                "project": session.get("project"),
+                "project_display_name": session.get("project_display_name") or session.get("project"),
+                "provider": session.get("provider"),
+                "session_id": session.get("session_id"),
+                "summary": session.get("summary") or "",
+                "status": session.get("status") or "waiting_for_response",
+                "is_processing": bool(session.get("is_processing", True)),
+                "last_activity": session.get("last_activity") or "",
+            }
+        )
+    return rows
+
+
+def _build_artifact_brief(data: Dict[str, Any]) -> Dict[str, Any]:
+    artifacts = data.get("artifacts") or []
+    latest = data.get("latestArtifact") or {}
+    categories = sorted({artifact.get("category") for artifact in artifacts if artifact.get("category")})
+    return {
+        "project": data.get("projectName"),
+        "project_path": data.get("projectPath"),
+        "latest_artifact": latest.get("relativePath"),
+        "latest_modified": latest.get("modified"),
+        "artifact_count": data.get("totalArtifacts", len(artifacts)),
+        "categories": categories,
+        "artifacts": [
+            {
+                "path": artifact.get("relativePath"),
+                "category": artifact.get("category"),
+                "modified": artifact.get("modified"),
+            }
+            for artifact in artifacts
+        ],
+    }
+
+
+def _build_project_digest(project: Dict[str, Any], summary: Dict[str, Any], waiting: List[Dict[str, Any]], artifacts: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "project": project.get("name"),
+        "project_display_name": _project_label(project),
+        "project_path": project.get("fullPath") or project.get("path") or "",
+        "status": summary.get("status"),
+        "counts": summary.get("counts") or {},
+        "next_task": summary.get("next_task") or {},
+        "guidance": summary.get("guidance") or {},
+        "waiting": _compact_waiting_sessions(waiting),
+        "artifacts": _build_artifact_brief(artifacts),
+        "updated_at": summary.get("updated_at"),
+    }
+
+
+def _build_daily_digest(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    waiting_total = sum(len(item.get("waiting") or []) for item in items)
+    task_total = sum((item.get("counts") or {}).get("total", 0) for item in items)
+    completed_total = sum((item.get("counts") or {}).get("completed", 0) for item in items)
+    return {
+        "projects": items,
+        "summary": {
+            "project_count": len(items),
+            "waiting_sessions": waiting_total,
+            "tasks_total": task_total,
+            "tasks_completed": completed_total,
+        },
+    }
+
+
+def _format_project_digest(payload: Dict[str, Any]) -> str:
+    counts = payload.get("counts") or {}
+    next_task = payload.get("next_task") or {}
+    waiting = payload.get("waiting") or []
+    artifact_info = payload.get("artifacts") or {}
+
+    lines = [f"[VibeLab Digest] {payload.get('project_display_name') or payload.get('project')}"]
+    lines.append(f"Status: {payload.get('status') or 'unknown'}")
+    lines.append(
+        f"Progress: {counts.get('completed', 0)}/{counts.get('total', 0)} done, "
+        f"in-progress {counts.get('in_progress', 0)}, pending {counts.get('pending', 0)}, blocked {counts.get('blocked', 0)}"
+    )
+    if next_task:
+        lines.append(f"Next: #{next_task.get('id', '?')} {next_task.get('title') or 'Untitled task'}")
+    lines.append(f"Waiting: {len(waiting)} session(s)")
+    if waiting:
+        first = waiting[0]
+        lines.append(
+            f"Top waiting: {first.get('provider')} {first.get('session_id')} { _truncate_text(first.get('summary'), 100) }"
+        )
+    if artifact_info.get("latest_artifact"):
+        lines.append(f"Latest artifact: {artifact_info['latest_artifact']}")
+    if payload.get("updated_at"):
+        lines.append(f"Updated: {payload['updated_at']}")
+    return "\n".join(lines)
+
+
+def _format_daily_digest(payload: Dict[str, Any]) -> str:
+    summary = payload.get("summary") or {}
+    items = payload.get("projects") or []
+    lines = ["[VibeLab Daily Digest]"]
+    lines.append(
+        f"Projects: {summary.get('project_count', 0)} | Waiting sessions: {summary.get('waiting_sessions', 0)} | Tasks: {summary.get('tasks_completed', 0)}/{summary.get('tasks_total', 0)} done"
+    )
+    for item in items[:6]:
+        counts = item.get("counts") or {}
+        lines.append(
+            f"- {item.get('project_display_name')}: {counts.get('completed', 0)}/{counts.get('total', 0)} done, waiting {len(item.get('waiting') or [])}"
+        )
+    return "\n".join(lines)
+
+
+def _maybe_send_openclaw_chat_notification(
+    payload: Dict[str, Any],
+    action: str,
+    notify_openclaw: bool,
+    notify_channel: Optional[str],
+) -> Dict[str, Any]:
+    if not notify_openclaw and not notify_channel:
+        return {"enabled": False, "sent": False, "channel": None, "message": ""}
+
+    resolved_channel = _resolve_push_channel(notify_channel)
+    if not resolved_channel:
+        raise ValueError(
+            "OpenClaw notification requested, but no channel is configured. Use --notify-to <channel> or run `vibelab openclaw configure --push-channel <channel>` first."
+        )
+
+    message_text = _build_openclaw_chat_notification(payload, action)
+    cmd_output = _send_openclaw_message(message_text, resolved_channel)
+    return {
+        "enabled": True,
+        "sent": True,
+        "channel": resolved_channel,
+        "message": message_text,
+        "output": cmd_output,
+    }
 
 
 @click.group(invoke_without_command=True)
@@ -508,6 +719,73 @@ def projects_add(ctx: Context, project_path: str, display_name: Optional[str]) -
     except Exception as exc:
         _handle_error(exc, ctx.json_mode)
 
+
+@projects.command("create")
+@click.argument("workspace_path")
+@click.option("--name", "display_name", default=None, metavar="DISPLAY_NAME", help="Optional display name to save for the project.")
+@click.option("--github-url", default=None, metavar="URL", help="Optional GitHub repository URL to clone into the new workspace.")
+@pass_context
+def projects_create(ctx: Context, workspace_path: str, display_name: Optional[str], github_url: Optional[str]) -> None:
+    """Create WORKSPACE_PATH as a new VibeLab project workspace."""
+    try:
+        project = projects_mod.create_project_workspace(
+            ctx.client,
+            _normalize_path(workspace_path),
+            display_name=display_name,
+            github_url=github_url,
+        )
+        if ctx.json_mode:
+            output(project, json_mode=True)
+        else:
+            success(f"Project '{_project_label(project)}' created.", json_mode=False)
+            info(f"  name : {project.get('name', '')}")
+            info(f"  path : {project.get('fullPath') or project.get('path') or ''}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@projects.command("idea")
+@click.argument("workspace_path")
+@click.option("--name", "display_name", default=None, metavar="DISPLAY_NAME", help="Optional display name to save for the project.")
+@click.option("--idea", required=True, metavar="TEXT", help="Initial idea to seed into the new project.")
+@click.option("--provider", type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False), default="claude", show_default=True, help="Provider used to start the seeded discussion.")
+@click.option("--timeout", default=180, show_default=True, metavar="SECONDS", help="Maximum seconds to wait for the initial seeded reply.")
+@pass_context
+def projects_idea(
+    ctx: Context,
+    workspace_path: str,
+    display_name: Optional[str],
+    idea: str,
+    provider: str,
+    timeout: int,
+) -> None:
+    """Create a new project and seed it with an initial idea discussion."""
+    try:
+        result = projects_mod.create_idea_project(
+            ctx.client,
+            _normalize_path(workspace_path),
+            display_name=display_name,
+            idea=idea,
+            provider=_normalize_provider(provider) or "claude",
+            timeout=timeout,
+        )
+        if ctx.json_mode:
+            output(result, json_mode=True)
+        else:
+            project = result.get("project") or {}
+            success(f"Project '{_project_label(project)}' created and seeded.", json_mode=False)
+            info(f"  name    : {project.get('name', '')}")
+            info(f"  path    : {project.get('fullPath') or project.get('path') or ''}")
+            chat = result.get("chat") or {}
+            session_id = chat.get("session_id") or chat.get("sessionId") or ""
+            if session_id:
+                info(f"  session : {session_id}")
+            reply = str(chat.get("reply") or "").strip()
+            if reply:
+                info("\nInitial reply:")
+                click.echo(reply)
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
 
 @projects.command("rename")
 @click.argument("project_ref")
@@ -697,6 +975,269 @@ def taskmaster_tasks(ctx: Context, project_ref: str) -> None:
                         ]
                     )
                 )
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@taskmaster.command("add-task")
+@click.argument("project_ref")
+@click.option("--prompt", default=None, metavar="TEXT", help="Prompt used to generate the task title/description.")
+@click.option("--title", default=None, metavar="TEXT", help="Explicit task title.")
+@click.option("--description", default=None, metavar="TEXT", help="Explicit task description.")
+@click.option("--priority", default="high", show_default=True, metavar="LEVEL", help="Task priority.")
+@click.option("--stage", default=None, metavar="STAGE", help="Optional workflow stage.")
+@click.option("--depends-on", "dependencies", multiple=True, help="Dependency task ID. Repeat for multiple dependencies.")
+@pass_context
+def taskmaster_add_task(
+    ctx: Context,
+    project_ref: str,
+    prompt: Optional[str],
+    title: Optional[str],
+    description: Optional[str],
+    priority: str,
+    stage: Optional[str],
+    dependencies: List[str],
+) -> None:
+    """Add a task to PROJECT_REF."""
+    try:
+        project = _resolve_project_ref(ctx.client, project_ref)
+        project_name = _require_project_name(project, project_ref)
+        data = taskmaster_mod.add_task(
+            ctx.client,
+            project_name,
+            prompt=prompt,
+            title=title,
+            description=description,
+            priority=priority,
+            dependencies=list(dependencies) or None,
+            stage=stage,
+        )
+        output(data, json_mode=ctx.json_mode, title=f"Task added: {_project_label(project)}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@taskmaster.command("update-task")
+@click.argument("project_ref")
+@click.argument("task_id")
+@click.option("--title", default=None, metavar="TEXT", help="New task title.")
+@click.option("--description", default=None, metavar="TEXT", help="New task description.")
+@click.option("--status", default=None, metavar="STATUS", help="New task status.")
+@click.option("--priority", default=None, metavar="LEVEL", help="New task priority.")
+@click.option("--details", default=None, metavar="TEXT", help="Detailed notes.")
+@click.option("--test-strategy", default=None, metavar="TEXT", help="Test strategy notes.")
+@click.option("--depends-on", "dependencies", multiple=True, help="Dependency task ID. Repeat for multiple dependencies.")
+@pass_context
+def taskmaster_update_task(
+    ctx: Context,
+    project_ref: str,
+    task_id: str,
+    title: Optional[str],
+    description: Optional[str],
+    status: Optional[str],
+    priority: Optional[str],
+    details: Optional[str],
+    test_strategy: Optional[str],
+    dependencies: List[str],
+) -> None:
+    """Update a workflow task in PROJECT_REF."""
+    try:
+        project = _resolve_project_ref(ctx.client, project_ref)
+        project_name = _require_project_name(project, project_ref)
+        data = taskmaster_mod.update_task(
+            ctx.client,
+            project_name,
+            task_id,
+            title=title,
+            description=description,
+            status=status,
+            priority=priority,
+            details=details,
+            testStrategy=test_strategy,
+            dependencies=list(dependencies) if dependencies else None,
+        )
+        output(data, json_mode=ctx.json_mode, title=f"Task updated: {_project_label(project)}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@taskmaster.command("artifacts")
+@click.argument("project_ref")
+@pass_context
+def taskmaster_artifacts(ctx: Context, project_ref: str) -> None:
+    """Summarize recent artifacts for PROJECT_REF."""
+    try:
+        project = _resolve_project_ref(ctx.client, project_ref)
+        project_name = _require_project_name(project, project_ref)
+        data = taskmaster_mod.get_artifact_summary(ctx.client, project_name)
+        brief = _build_artifact_brief(data)
+        output(brief if ctx.json_mode else brief.get("artifacts") or [], json_mode=ctx.json_mode, title=f"Artifacts: {_project_label(project)}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@cli.group()
+def workflow() -> None:
+    """Workflow-oriented control commands for OpenClaw."""
+
+
+@workflow.command("status")
+@click.option("--project", "project_ref", required=True, metavar="PROJECT", help="Project name, display name, or path.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@pass_context
+def workflow_status(ctx: Context, project_ref: str, force_json: bool) -> None:
+    """Show workflow status for a project."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        payload = _collect_project_digest(ctx, project_ref)
+        output(payload, json_mode=ctx.json_mode, title=f"Workflow Status: {payload.get('project_display_name')}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@workflow.command("continue")
+@click.option("--project", "project_ref", required=True, metavar="PROJECT", help="Project name, display name, or path.")
+@click.option("--session", "session_id", required=True, metavar="SESSION_ID", help="Session ID to continue.")
+@click.option("--message", "message", "-m", required=True, metavar="TEXT", help="Instruction to continue execution.")
+@click.option("--notify-openclaw", is_flag=True, default=False, help="Send a completion notification to OpenClaw.")
+@click.option("--notify-to", "notify_channel", default=None, metavar="CHANNEL", help="Override the OpenClaw channel for this command.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@pass_context
+def workflow_continue(
+    ctx: Context,
+    project_ref: str,
+    session_id: str,
+    message: str,
+    notify_openclaw: bool,
+    notify_channel: Optional[str],
+    force_json: bool,
+) -> None:
+    """Continue a workflow by replying to a waiting session."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        project = _resolve_project_ref(ctx.client, project_ref, allow_path_fallback=True)
+        provider = _resolve_session_provider(ctx.client, project, session_id)
+        project_path = project.get("fullPath") or project.get("path") or project_ref
+        result = chat_mod.send_message(
+            ctx.client,
+            project_path=str(project_path),
+            message=message,
+            provider=provider,
+            session_id=session_id,
+            timeout=180,
+        )
+        payload = {
+            "action": "continue",
+            "project": project.get("name") or project.get("fullPath") or project.get("path"),
+            "project_display_name": _project_label(project),
+            "project_path": result.get("project_path"),
+            "provider": result.get("provider", provider),
+            "session_id": result.get("session_id") or session_id,
+            "reply": result.get("reply", ""),
+        }
+        payload["openclaw_notification"] = _maybe_send_openclaw_chat_notification(
+            payload,
+            action="workflow_continue",
+            notify_openclaw=notify_openclaw,
+            notify_channel=notify_channel,
+        )
+        output(payload, json_mode=ctx.json_mode, title=f"Workflow Continue: {_project_label(project)}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@workflow.command("retry")
+@click.option("--project", "project_ref", required=True, metavar="PROJECT", help="Project name, display name, or path.")
+@click.option("--task", "task_id", required=True, metavar="TASK_ID", help="Task ID to mark for retry.")
+@click.option("--message", default=None, metavar="TEXT", help="Optional retry note appended to task details.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@pass_context
+def workflow_retry(ctx: Context, project_ref: str, task_id: str, message: Optional[str], force_json: bool) -> None:
+    """Retry a workflow task by resetting it to pending."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        project = _resolve_project_ref(ctx.client, project_ref)
+        project_name = _require_project_name(project, project_ref)
+        details = f"Retry requested. {message}".strip() if message else "Retry requested."
+        data = taskmaster_mod.update_task(ctx.client, project_name, task_id, status="pending", details=details)
+        output(data, json_mode=ctx.json_mode, title=f"Workflow Retry: {_project_label(project)}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@workflow.command("approve")
+@click.option("--project", "project_ref", required=True, metavar="PROJECT", help="Project name, display name, or path.")
+@click.option("--task", "task_id", required=True, metavar="TASK_ID", help="Task ID to approve.")
+@click.option("--note", default=None, metavar="TEXT", help="Optional approval note.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@pass_context
+def workflow_approve(ctx: Context, project_ref: str, task_id: str, note: Optional[str], force_json: bool) -> None:
+    """Approve a task by moving it to in-progress."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        project = _resolve_project_ref(ctx.client, project_ref)
+        project_name = _require_project_name(project, project_ref)
+        details = f"Approved by OpenClaw. {note}".strip() if note else "Approved by OpenClaw."
+        data = taskmaster_mod.update_task(ctx.client, project_name, task_id, status="in-progress", details=details)
+        output(data, json_mode=ctx.json_mode, title=f"Workflow Approve: {_project_label(project)}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@workflow.command("reject")
+@click.option("--project", "project_ref", required=True, metavar="PROJECT", help="Project name, display name, or path.")
+@click.option("--task", "task_id", required=True, metavar="TASK_ID", help="Task ID to reject.")
+@click.option("--reason", default=None, metavar="TEXT", help="Optional rejection reason.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@pass_context
+def workflow_reject(ctx: Context, project_ref: str, task_id: str, reason: Optional[str], force_json: bool) -> None:
+    """Reject or defer a task."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        project = _resolve_project_ref(ctx.client, project_ref)
+        project_name = _require_project_name(project, project_ref)
+        details = f"Rejected by OpenClaw. {reason}".strip() if reason else "Rejected by OpenClaw."
+        data = taskmaster_mod.update_task(ctx.client, project_name, task_id, status="deferred", details=details)
+        output(data, json_mode=ctx.json_mode, title=f"Workflow Reject: {_project_label(project)}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@workflow.command("resume")
+@click.option("--project", "project_ref", required=True, metavar="PROJECT", help="Project name, display name, or path.")
+@click.option("--session", "session_id", required=True, metavar="SESSION_ID", help="Session ID to resume.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@pass_context
+def workflow_resume(ctx: Context, project_ref: str, session_id: str, force_json: bool) -> None:
+    """Resume a waiting session with a default continue instruction."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        project = _resolve_project_ref(ctx.client, project_ref, allow_path_fallback=True)
+        provider = _resolve_session_provider(ctx.client, project, session_id)
+        project_path = project.get("fullPath") or project.get("path") or project_ref
+        result = chat_mod.send_message(
+            ctx.client,
+            project_path=str(project_path),
+            message="Continue from the latest state and summarize the next meaningful checkpoint.",
+            provider=provider,
+            session_id=session_id,
+            timeout=180,
+        )
+        payload = {
+            "action": "resume",
+            "project": project.get("name") or project.get("fullPath") or project.get("path"),
+            "project_display_name": _project_label(project),
+            "provider": result.get("provider", provider),
+            "session_id": result.get("session_id") or session_id,
+            "reply": result.get("reply", ""),
+        }
+        output(payload, json_mode=ctx.json_mode, title=f"Workflow Resume: {_project_label(project)}")
     except Exception as exc:
         _handle_error(exc, ctx.json_mode)
 
@@ -908,45 +1449,129 @@ def server_logs(ctx: Context, lines: int, follow: bool) -> None:
 
 @cli.group()
 def chat() -> None:
-    """Chat with Claude sessions via WebSocket."""
+    """Chat with provider sessions via WebSocket."""
 
 
 @chat.command("send")
 @click.option("--project", "project_ref", required=True, metavar="PROJECT", help="Project name, display name, or filesystem path.")
-@click.option("--message", "message", "-m", required=True, metavar="TEXT", help="Message to send to the Claude session.")
+@click.option("--message", "message", "-m", required=True, metavar="TEXT", help="Message to send to the session.")
+@click.option("--provider", type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False), default="claude", show_default=True, help="Session provider.")
 @click.option("--session", "session_id", default=None, metavar="SESSION_ID", help="Session ID to resume (omit to start a new session).")
 @click.option("--timeout", type=int, default=180, show_default=True, metavar="SECONDS", help="Maximum seconds to wait for completion.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@click.option("--notify-openclaw", is_flag=True, default=False, help="After completion, send a summary message to the configured OpenClaw channel.")
+@click.option("--notify-to", "notify_channel", default=None, metavar="CHANNEL", help="Override the OpenClaw notification channel for this command.")
 @pass_context
 def chat_send(
     ctx: Context,
     project_ref: str,
     message: str,
+    provider: str,
     session_id: Optional[str],
     timeout: int,
+    force_json: bool,
+    notify_openclaw: bool,
+    notify_channel: Optional[str],
 ) -> None:
-    """Send a message to a Claude session and print the reply."""
+    """Send a message to a provider session and print the reply."""
     try:
+        if force_json:
+            ctx.json_mode = True
+        normalized_provider = _normalize_provider(provider) or "claude"
         project = _resolve_project_ref(ctx.client, project_ref, allow_path_fallback=True)
         project_path = project.get("fullPath") or project.get("path") or project_ref
         result = chat_mod.send_message(
             ctx.client,
             project_path=str(project_path),
             message=message,
+            provider=normalized_provider,
             session_id=session_id or None,
             timeout=timeout,
         )
         payload = {
             "project": project.get("name") or project.get("fullPath") or project.get("path"),
+            "project_display_name": _project_label(project),
             "project_path": result.get("project_path"),
+            "provider": result.get("provider", normalized_provider),
             "session_id": result.get("session_id"),
             "reply": result.get("reply", ""),
         }
+        payload["openclaw_notification"] = _maybe_send_openclaw_chat_notification(
+            payload,
+            action="chat_send",
+            notify_openclaw=notify_openclaw,
+            notify_channel=notify_channel,
+        )
         if ctx.json_mode:
             output(payload, json_mode=True)
         else:
             click.echo(result.get("reply", ""))
+            info(f"Provider: {payload['provider']}")
             info(f"Session: {result.get('session_id', '')}")
             info(f"Project: {payload['project_path']}")
+            if payload["openclaw_notification"].get("sent"):
+                info(f"OpenClaw: sent to {payload['openclaw_notification']['channel']}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@chat.command("reply")
+@click.option("--project", "project_ref", required=True, metavar="PROJECT", help="Project name, display name, or filesystem path.")
+@click.option("--session", "session_id", required=True, metavar="SESSION_ID", help="Session ID to resume.")
+@click.option("--message", "message", "-m", required=True, metavar="TEXT", help="Reply text to send.")
+@click.option("--timeout", type=int, default=180, show_default=True, metavar="SECONDS", help="Maximum seconds to wait for completion.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@click.option("--notify-openclaw", is_flag=True, default=False, help="After completion, send a summary message to the configured OpenClaw channel.")
+@click.option("--notify-to", "notify_channel", default=None, metavar="CHANNEL", help="Override the OpenClaw notification channel for this command.")
+@pass_context
+def chat_reply(
+    ctx: Context,
+    project_ref: str,
+    session_id: str,
+    message: str,
+    timeout: int,
+    force_json: bool,
+    notify_openclaw: bool,
+    notify_channel: Optional[str],
+) -> None:
+    """Reply to an existing provider session and print the reply."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        project = _resolve_project_ref(ctx.client, project_ref, allow_path_fallback=True)
+        normalized_provider = _resolve_session_provider(ctx.client, project, session_id)
+        project_path = project.get("fullPath") or project.get("path") or project_ref
+        result = chat_mod.send_message(
+            ctx.client,
+            project_path=str(project_path),
+            message=message,
+            provider=normalized_provider,
+            session_id=session_id,
+            timeout=timeout,
+        )
+        payload = {
+            "project": project.get("name") or project.get("fullPath") or project.get("path"),
+            "project_display_name": _project_label(project),
+            "project_path": result.get("project_path"),
+            "provider": result.get("provider", normalized_provider),
+            "session_id": result.get("session_id") or session_id,
+            "reply": result.get("reply", ""),
+        }
+        payload["openclaw_notification"] = _maybe_send_openclaw_chat_notification(
+            payload,
+            action="chat_reply",
+            notify_openclaw=notify_openclaw,
+            notify_channel=notify_channel,
+        )
+        if ctx.json_mode:
+            output(payload, json_mode=True)
+        else:
+            click.echo(result.get("reply", ""))
+            info(f"Provider: {payload['provider']}")
+            info(f"Session: {payload['session_id']}")
+            info(f"Project: {payload['project_path']}")
+            if payload["openclaw_notification"].get("sent"):
+                info(f"OpenClaw: sent to {payload['openclaw_notification']['channel']}")
     except Exception as exc:
         _handle_error(exc, ctx.json_mode)
 
@@ -954,10 +1579,13 @@ def chat_send(
 @chat.command("sessions")
 @click.option("--project", "project_ref", default=None, metavar="PROJECT", help="Optional project name, display name, or path filter.")
 @click.option("--provider", type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False), default=None, help="Optional provider filter.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
 @pass_context
-def chat_sessions(ctx: Context, project_ref: Optional[str], provider: Optional[str]) -> None:
-    """List active sessions across all projects."""
+def chat_sessions(ctx: Context, project_ref: Optional[str], provider: Optional[str], force_json: bool) -> None:
+    """List known sessions across all projects."""
     try:
+        if force_json:
+            ctx.json_mode = True
         sessions = chat_mod.get_active_sessions(ctx.client)
         normalized_provider = _normalize_provider(provider)
         if project_ref:
@@ -971,7 +1599,92 @@ def chat_sessions(ctx: Context, project_ref: Optional[str], provider: Optional[s
             ]
         if normalized_provider:
             sessions = [session for session in sessions if session.get("provider") == normalized_provider]
-        output(sessions, json_mode=ctx.json_mode, title="Active Sessions")
+        output(sessions, json_mode=ctx.json_mode, title="Known Sessions")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@chat.command("waiting")
+@click.option("--project", "project_ref", default=None, metavar="PROJECT", help="Optional project name, display name, or path filter.")
+@click.option("--provider", type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False), default=None, help="Optional provider filter.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@pass_context
+def chat_waiting(ctx: Context, project_ref: Optional[str], provider: Optional[str], force_json: bool) -> None:
+    """List sessions currently waiting for response / still processing."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        sessions = chat_mod.get_waiting_sessions_compact(ctx.client)
+        normalized_provider = _normalize_provider(provider)
+        if project_ref:
+            project = _resolve_project_ref(ctx.client, project_ref)
+            project_name = project.get("name")
+            project_path = project.get("fullPath") or project.get("path")
+            sessions = [
+                session
+                for session in sessions
+                if session.get("project") == project_name or session.get("project_path") == project_path
+            ]
+        if normalized_provider:
+            sessions = [session for session in sessions if session.get("provider") == normalized_provider]
+        compact = _compact_waiting_sessions(sessions)
+        output(compact, json_mode=ctx.json_mode, title="Waiting Sessions")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@chat.command("watch")
+@click.option("--timeout", type=int, default=300, show_default=True, metavar="SECONDS", help="Maximum seconds to watch. Use 0 or a negative value to watch until interrupted.")
+@click.option("--event", "event_types", multiple=True, help="Event type filter. Repeat to watch multiple event types.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@click.option("--notify-openclaw", is_flag=True, default=False, help="Push each matching event to OpenClaw as it arrives.")
+@click.option("--notify-to", "notify_channel", default=None, metavar="CHANNEL", help="Override the OpenClaw notification channel for this command.")
+@pass_context
+def chat_watch(
+    ctx: Context,
+    timeout: int,
+    event_types: List[str],
+    force_json: bool,
+    notify_openclaw: bool,
+    notify_channel: Optional[str],
+) -> None:
+    """Watch realtime session and task events."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+
+        events: List[Dict[str, Any]] = []
+
+        def handle_event(event: Dict[str, Any]) -> None:
+            events.append(event)
+            if notify_openclaw or notify_channel:
+                payload = {
+                    "project_display_name": event.get("project") or "unknown",
+                    "provider": event.get("provider") or "system",
+                    "session_id": event.get("session_id") or "",
+                    "reply": json.dumps(event, ensure_ascii=False),
+                }
+                _maybe_send_openclaw_chat_notification(
+                    payload,
+                    action=f"event:{event.get('type')}",
+                    notify_openclaw=notify_openclaw,
+                    notify_channel=notify_channel,
+                )
+            if not ctx.json_mode:
+                output([event], json_mode=False)
+
+        returned = chat_mod.watch_events(
+            ctx.client,
+            timeout=timeout,
+            event_types=list(event_types) or None,
+            on_event=handle_event,
+        )
+
+        if ctx.json_mode:
+            output(events or returned, json_mode=True)
+    except KeyboardInterrupt:
+        if ctx.json_mode:
+            output([], json_mode=True)
     except Exception as exc:
         _handle_error(exc, ctx.json_mode)
 
@@ -979,6 +1692,89 @@ def chat_sessions(ctx: Context, project_ref: Optional[str], provider: Optional[s
 @cli.group()
 def openclaw() -> None:
     """OpenClaw integration commands."""
+
+
+@cli.group()
+def digest() -> None:
+    """Digest and inbox summaries for OpenClaw/mobile use."""
+
+
+def _collect_project_digest(ctx: Context, project_ref: str) -> Dict[str, Any]:
+    project = _resolve_project_ref(ctx.client, project_ref)
+    project_name = _require_project_name(project, project_ref)
+    summary = taskmaster_mod.build_summary(ctx.client, project_name)
+    waiting = [
+        row for row in chat_mod.get_waiting_sessions_compact(ctx.client)
+        if row.get("project") == project_name
+        or row.get("project_path") == (project.get("fullPath") or project.get("path"))
+    ]
+    artifacts = taskmaster_mod.get_artifact_summary(ctx.client, project_name)
+    return _build_project_digest(project, summary, waiting, artifacts)
+
+
+@digest.command("project")
+@click.option("--project", "project_ref", required=True, metavar="PROJECT", help="Project name, display name, or path.")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@click.option("--push-openclaw", is_flag=True, default=False, help="Send the digest to the configured OpenClaw channel.")
+@click.option("--to", "channel", default=None, metavar="CHANNEL", help="Override the OpenClaw channel.")
+@pass_context
+def digest_project(ctx: Context, project_ref: str, force_json: bool, push_openclaw: bool, channel: Optional[str]) -> None:
+    """Build a project digest."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        payload = _collect_project_digest(ctx, project_ref)
+        if push_openclaw or channel:
+            resolved_channel = _resolve_push_channel(channel)
+            if not resolved_channel:
+                raise ValueError("No channel specified. Use --to <channel> or run `vibelab openclaw configure --push-channel <channel>` first.")
+            send_output = _send_openclaw_message(_format_project_digest(payload), resolved_channel)
+            payload["openclaw_notification"] = {"sent": True, "channel": resolved_channel, "output": send_output}
+        if ctx.json_mode:
+            output(payload, json_mode=True)
+        else:
+            click.echo(_format_project_digest(payload))
+            if payload.get("openclaw_notification", {}).get("sent"):
+                info(f"OpenClaw: sent to {payload['openclaw_notification']['channel']}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
+
+
+@digest.command("daily")
+@click.option("--json", "force_json", is_flag=True, default=False, help="Output results as JSON.")
+@click.option("--push-openclaw", is_flag=True, default=False, help="Send the digest to the configured OpenClaw channel.")
+@click.option("--to", "channel", default=None, metavar="CHANNEL", help="Override the OpenClaw channel.")
+@pass_context
+def digest_daily(ctx: Context, force_json: bool, push_openclaw: bool, channel: Optional[str]) -> None:
+    """Build a multi-project daily digest."""
+    try:
+        if force_json:
+            ctx.json_mode = True
+        projects = projects_mod.list_projects(ctx.client)
+        items = []
+        for project in projects:
+            try:
+                ref = project.get("name") or project.get("fullPath") or project.get("path")
+                if not ref:
+                    continue
+                items.append(_collect_project_digest(ctx, ref))
+            except Exception:
+                continue
+        payload = _build_daily_digest(items)
+        if push_openclaw or channel:
+            resolved_channel = _resolve_push_channel(channel)
+            if not resolved_channel:
+                raise ValueError("No channel specified. Use --to <channel> or run `vibelab openclaw configure --push-channel <channel>` first.")
+            send_output = _send_openclaw_message(_format_daily_digest(payload), resolved_channel)
+            payload["openclaw_notification"] = {"sent": True, "channel": resolved_channel, "output": send_output}
+        if ctx.json_mode:
+            output(payload, json_mode=True)
+        else:
+            click.echo(_format_daily_digest(payload))
+            if payload.get("openclaw_notification", {}).get("sent"):
+                info(f"OpenClaw: sent to {payload['openclaw_notification']['channel']}")
+    except Exception as exc:
+        _handle_error(exc, ctx.json_mode)
 
 
 @openclaw.command("install")

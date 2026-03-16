@@ -1580,6 +1580,44 @@ router.get('/tasks/:projectName', async (req, res) => {
 });
 
 /**
+ * GET /api/taskmaster/artifacts/:projectName
+ * Summarize recent project artifacts for mobile/reporting workflows.
+ */
+router.get('/artifacts/:projectName', async (req, res) => {
+    try {
+        const { projectName } = req.params;
+
+        let projectPath;
+        try {
+            projectPath = await extractProjectDirectory(projectName);
+        } catch (error) {
+            return res.status(404).json({
+                error: 'Project not found',
+                message: `Project "${projectName}" does not exist`
+            });
+        }
+
+        const artifacts = await summarizeProjectArtifacts(projectPath);
+        const latest = artifacts.length > 0 ? artifacts[0] : null;
+
+        res.json({
+            projectName,
+            projectPath,
+            artifacts,
+            latestArtifact: latest,
+            totalArtifacts: artifacts.length,
+            timestamp: new Date().toISOString(),
+        });
+    } catch (error) {
+        console.error('TaskMaster artifact summary error:', error);
+        res.status(500).json({
+            error: 'Failed to summarize project artifacts',
+            message: error.message,
+        });
+    }
+});
+
+/**
  * GET /api/taskmaster/prd/:projectName
  * List all PRD files in the project's .pipeline/docs directory
  */
@@ -2312,6 +2350,53 @@ function normalizeLoadedTemplate(template = {}) {
 
 function cloneJsonCompatible(value) {
     return JSON.parse(JSON.stringify(value));
+}
+
+async function summarizeProjectArtifacts(projectPath, limit = 12) {
+    const candidates = [
+        '.pipeline/docs',
+        '.pipeline/tasks',
+        'results',
+        'reports',
+        'artifacts',
+        'output',
+        'outputs',
+        'analysis',
+        'figures',
+        'plots',
+        'tables',
+        'paper',
+        'drafts',
+    ];
+
+    const artifactFiles = [];
+    for (const relativeDir of candidates) {
+        const targetDir = path.join(projectPath, relativeDir);
+        try {
+            const entries = await fsPromises.readdir(targetDir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (!entry.isFile()) {
+                    continue;
+                }
+                const fullPath = path.join(targetDir, entry.name);
+                const stats = await fsPromises.stat(fullPath);
+                artifactFiles.push({
+                    name: entry.name,
+                    relativePath: path.relative(projectPath, fullPath),
+                    category: relativeDir,
+                    size: stats.size,
+                    modified: stats.mtime.toISOString(),
+                });
+            }
+        } catch (error) {
+            if (error?.code !== 'ENOENT') {
+                console.warn('[TaskMaster] Artifact scan skipped for', targetDir, error.message);
+            }
+        }
+    }
+
+    artifactFiles.sort((a, b) => new Date(b.modified) - new Date(a.modified));
+    return artifactFiles.slice(0, limit);
 }
 
 function buildBriefFromTemplate(template, nowDate) {

@@ -40,6 +40,49 @@ def list_tasks(client: VibeLab, project_name: str) -> Dict[str, Any]:
     return resp.json()
 
 
+def add_task(
+    client: VibeLab,
+    project_name: str,
+    *,
+    prompt: Optional[str] = None,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    priority: str = "high",
+    dependencies: Optional[List[str]] = None,
+    stage: Optional[str] = None,
+    insert_after_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """POST /api/taskmaster/add-task/:projectName."""
+    body: Dict[str, Any] = {"priority": priority}
+    if prompt is not None:
+        body["prompt"] = prompt
+    if title is not None:
+        body["title"] = title
+    if description is not None:
+        body["description"] = description
+    if dependencies is not None:
+        body["dependencies"] = dependencies
+    if stage is not None:
+        body["stage"] = stage
+    if insert_after_id is not None:
+        body["insertAfterId"] = insert_after_id
+    resp = client.post(f"/api/taskmaster/add-task/{project_name}", body)
+    return resp.json()
+
+
+def update_task(client: VibeLab, project_name: str, task_id: str, **fields: Any) -> Dict[str, Any]:
+    """PUT /api/taskmaster/update-task/:projectName/:taskId."""
+    body = {key: value for key, value in fields.items() if value is not None}
+    resp = client.put(f"/api/taskmaster/update-task/{project_name}/{task_id}", body)
+    return resp.json()
+
+
+def delete_task(client: VibeLab, project_name: str, task_id: str) -> Dict[str, Any]:
+    """DELETE /api/taskmaster/delete-task/:projectName/:taskId."""
+    resp = client.delete(f"/api/taskmaster/delete-task/{project_name}/{task_id}")
+    return resp.json()
+
+
 def get_next_task(client: VibeLab, project_name: str) -> Dict[str, Any]:
     """GET /api/taskmaster/next/:projectName."""
     resp = client.get(f"/api/taskmaster/next/{project_name}")
@@ -55,6 +98,12 @@ def get_next_guidance(client: VibeLab, project_name: str) -> Dict[str, Any]:
 def get_summary(client: VibeLab, project_name: str) -> Dict[str, Any]:
     """GET /api/taskmaster/summary/:projectName."""
     resp = client.get(f"/api/taskmaster/summary/{project_name}")
+    return resp.json()
+
+
+def get_artifact_summary(client: VibeLab, project_name: str) -> Dict[str, Any]:
+    """GET /api/taskmaster/artifacts/:projectName."""
+    resp = client.get(f"/api/taskmaster/artifacts/{project_name}")
     return resp.json()
 
 

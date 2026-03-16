@@ -25,6 +25,12 @@ vibelab projects list
 # Add a local project path
 vibelab projects add /path/to/project --name "Demo Project"
 
+# Create a new empty project workspace
+vibelab projects create /path/to/new-project --name "Demo Project"
+
+# Create a new project and seed it with an initial idea discussion
+vibelab projects idea /path/to/new-idea-project --name "Idea Project" --idea "Build an OpenClaw-native project secretary for VibeLab"
+
 # Pipe JSON output to jq
 vibelab --json projects list | jq '.[].displayName'
 
