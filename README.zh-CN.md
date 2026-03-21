@@ -46,14 +46,12 @@
 
 Dr. Claw 是一个面向不同研究方向的通用 AI 研究助手，帮助研究者和团队完成从想法形成、实验推进到论文产出的全流程工作。它把关键研究环节整合到同一个空间中，让你把精力放在问题本身和迭代质量上，而不是工具切换与流程拼接。
 
-<details>
 <strong>产品截图</strong>
 
 <p align="center">
   <img src="public/screenshots/chat.png" alt="Dr. Claw 对话界面" width="1000">
 </p>
 
-</details>
 
 <details>
 <summary><strong>理念：杠杆化认知</strong></summary>
