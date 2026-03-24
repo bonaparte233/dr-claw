@@ -96,6 +96,31 @@ const runMigrations = () => {
       db.exec('ALTER TABLE users ADD COLUMN notification_email TEXT');
     }
 
+    // Migration: add FK from project_references.project_id → projects(id)
+    const prInfo = db.prepare("PRAGMA table_info(project_references)").all();
+    if (prInfo.length > 0) {
+      const fkList = db.prepare("PRAGMA foreign_key_list(project_references)").all();
+      const hasProjectFk = fkList.some(fk => fk.table === 'projects');
+      if (!hasProjectFk) {
+        console.log('Running migration: Recreating project_references with FK to projects');
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS project_references_new (
+            project_id TEXT NOT NULL,
+            reference_id TEXT NOT NULL,
+            added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(project_id, reference_id),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (reference_id) REFERENCES references_library(id) ON DELETE CASCADE
+          );
+          INSERT OR IGNORE INTO project_references_new (project_id, reference_id, added_at)
+            SELECT project_id, reference_id, added_at FROM project_references;
+          DROP TABLE project_references;
+          ALTER TABLE project_references_new RENAME TO project_references;
+          CREATE INDEX IF NOT EXISTS idx_project_references_project ON project_references(project_id);
+        `);
+      }
+    }
+
     console.log('Database migrations completed successfully');
   } catch (error) {
     console.error('Error running migrations:', error.message);
@@ -734,6 +759,8 @@ const referencesDb = {
       INSERT OR IGNORE INTO reference_tags (reference_id, tag) VALUES (?, ?)
     `);
 
+    const deleteTags = db.prepare(`DELETE FROM reference_tags WHERE reference_id = ?`);
+
     const tx = db.transaction((rows) => {
       const ids = [];
       for (const item of rows) {
@@ -755,7 +782,8 @@ const referencesDb = {
           item.citationKey,
           item.rawData ? JSON.stringify(item.rawData) : null,
         );
-        // Upsert tags
+        // Clean stale tags, then re-insert
+        deleteTags.run(id);
         for (const tag of item.keywords || []) {
           insertTag.run(id, tag);
         }
@@ -796,10 +824,21 @@ const referencesDb = {
       INSERT OR IGNORE INTO reference_tags (reference_id, tag) VALUES (?, ?)
     `);
 
+    const deleteTags = db.prepare(`DELETE FROM reference_tags WHERE reference_id = ?`);
+
     const tx = db.transaction((rows) => {
       const ids = [];
       for (const item of rows) {
-        const id = `${source}_${userId}_${item.citationKey || crypto.randomUUID()}`;
+        // When no citationKey, generate deterministic ID from content
+        let key = item.citationKey;
+        if (!key) {
+          const hash = crypto.createHash('sha256')
+            .update(`${item.title || ''}|${JSON.stringify(item.authors || [])}|${item.year || ''}`)
+            .digest('hex')
+            .slice(0, 16);
+          key = hash;
+        }
+        const id = `${source}_${userId}_${key}`;
         upsert.run(
           id,
           userId,
@@ -816,6 +855,8 @@ const referencesDb = {
           JSON.stringify(item.keywords || []),
           item.citationKey || null,
         );
+        // Clean stale tags, then re-insert
+        deleteTags.run(id);
         for (const tag of item.keywords || []) {
           insertTag.run(id, tag);
         }
@@ -864,9 +905,9 @@ const referencesDb = {
   },
 
   /** Single reference detail. */
-  getReference: (id) => {
+  getReference: (id, userId) => {
     try {
-      const row = db.prepare('SELECT * FROM references_library WHERE id = ?').get(id);
+      const row = db.prepare('SELECT * FROM references_library WHERE id = ? AND user_id = ?').get(id, userId);
       if (!row) return null;
       return {
         ...row,
@@ -880,15 +921,15 @@ const referencesDb = {
   },
 
   /** Get references linked to a project. */
-  getProjectReferences: (projectId) => {
+  getProjectReferences: (projectId, userId) => {
     try {
       const rows = db.prepare(`
         SELECT r.*, pr.added_at AS linked_at
         FROM references_library r
         JOIN project_references pr ON pr.reference_id = r.id
-        WHERE pr.project_id = ?
+        WHERE pr.project_id = ? AND r.user_id = ?
         ORDER BY pr.added_at DESC
-      `).all(projectId);
+      `).all(projectId, userId);
       return rows.map((r) => ({
         ...r,
         authors: r.authors ? JSON.parse(r.authors) : [],
@@ -900,9 +941,11 @@ const referencesDb = {
     }
   },
 
-  /** Link a reference to a project. */
-  linkToProject: (projectId, referenceId) => {
+  /** Link a reference to a project (verifies ownership). */
+  linkToProject: (projectId, referenceId, userId) => {
     try {
+      const ref = db.prepare('SELECT id FROM references_library WHERE id = ? AND user_id = ?').get(referenceId, userId);
+      if (!ref) return false;
       db.prepare('INSERT OR IGNORE INTO project_references (project_id, reference_id) VALUES (?, ?)').run(projectId, referenceId);
       return true;
     } catch (err) {
@@ -910,9 +953,11 @@ const referencesDb = {
     }
   },
 
-  /** Unlink a reference from a project. */
-  unlinkFromProject: (projectId, referenceId) => {
+  /** Unlink a reference from a project (verifies ownership). */
+  unlinkFromProject: (projectId, referenceId, userId) => {
     try {
+      const ref = db.prepare('SELECT id FROM references_library WHERE id = ? AND user_id = ?').get(referenceId, userId);
+      if (!ref) return false;
       const result = db.prepare('DELETE FROM project_references WHERE project_id = ? AND reference_id = ?').run(projectId, referenceId);
       return result.changes > 0;
     } catch (err) {
@@ -972,11 +1017,21 @@ const referencesDb = {
   /** Bulk-delete references by id list. Returns number of deleted rows. */
   bulkDeleteReferences: (userId, referenceIds) => {
     if (!referenceIds || referenceIds.length === 0) return 0;
-    const placeholders = referenceIds.map(() => '?').join(',');
-    const result = db.prepare(
-      `DELETE FROM references_library WHERE user_id = ? AND id IN (${placeholders})`
-    ).run(userId, ...referenceIds);
-    return result.changes;
+    // Chunk to avoid SQLite parameter limit
+    const CHUNK_SIZE = 500;
+    let total = 0;
+    const tx = db.transaction(() => {
+      for (let i = 0; i < referenceIds.length; i += CHUNK_SIZE) {
+        const chunk = referenceIds.slice(i, i + CHUNK_SIZE);
+        const placeholders = chunk.map(() => '?').join(',');
+        const result = db.prepare(
+          `DELETE FROM references_library WHERE user_id = ? AND id IN (${placeholders})`
+        ).run(userId, ...chunk);
+        total += result.changes;
+      }
+    });
+    tx();
+    return total;
   },
 };
 

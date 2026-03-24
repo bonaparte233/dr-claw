@@ -42,7 +42,7 @@ function cleanLatex(str) {
   result = result.replace(/\\\\/g, ' ');
   result = result.replace(/\\&/g, '&');
   result = result.replace(/\\%/g, '%');
-  result = result.replace(/~/, ' ');
+  result = result.replace(/~/g, ' ');
   return result.trim();
 }
 
@@ -125,8 +125,8 @@ function parseFields(str) {
     } else if (str[i] === '"') {
       i++; // skip opening quote
       let vStart = i;
-      while (i < len && str[i] !== '"') i++;
-      value = str.slice(vStart, i);
+      while (i < len && !(str[i] === '"' && str[i - 1] !== '\\')) i++;
+      value = str.slice(vStart, i).replace(/\\"/g, '"');
       i++; // skip closing quote
     } else {
       // Bare value (number or string reference)
@@ -159,8 +159,8 @@ function parseFields(str) {
       } else if (str[i] === '"') {
         i++;
         let vStart = i;
-        while (i < len && str[i] !== '"') i++;
-        value += str.slice(vStart, i);
+        while (i < len && !(str[i] === '"' && str[i - 1] !== '\\')) i++;
+        value += str.slice(vStart, i).replace(/\\"/g, '"');
         i++;
       }
     }

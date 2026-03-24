@@ -345,9 +345,9 @@ export const api = {
   // References (literature library) endpoints
   references: {
     list: (params) => authenticatedFetch(`/api/references?${new URLSearchParams(params || {})}`),
-    get: (id) => authenticatedFetch(`/api/references/${id}`),
-    delete: (id) => authenticatedFetch(`/api/references/${id}`, { method: 'DELETE' }),
-    getPdf: (id) => authenticatedFetch(`/api/references/${id}/pdf`),
+    get: (id) => authenticatedFetch(`/api/references/${encodeURIComponent(id)}`),
+    delete: (id) => authenticatedFetch(`/api/references/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    getPdf: (id) => authenticatedFetch(`/api/references/${encodeURIComponent(id)}/pdf`),
     syncZotero: ({ projectName, collectionKey, sourceIds } = {}) => authenticatedFetch('/api/references/sync/zotero', { method: 'POST', body: JSON.stringify({ projectName, collectionKey, sourceIds }) }),
     zoteroItems: (params) => {
       const qs = new URLSearchParams();
@@ -360,8 +360,8 @@ export const api = {
     zoteroStatus: () => authenticatedFetch('/api/references/zotero/status'),
     zoteroCollections: () => authenticatedFetch('/api/references/zotero/collections'),
     projectRefs: (projectName) => authenticatedFetch(`/api/references/project/${encodeURIComponent(projectName)}`),
-    linkToProject: (projectName, refId) => authenticatedFetch(`/api/references/project/${encodeURIComponent(projectName)}/${refId}`, { method: 'POST' }),
-    unlinkFromProject: (projectName, refId) => authenticatedFetch(`/api/references/project/${encodeURIComponent(projectName)}/${refId}`, { method: 'DELETE' }),
+    linkToProject: (projectName, refId) => authenticatedFetch(`/api/references/project/${encodeURIComponent(projectName)}/${encodeURIComponent(refId)}`, { method: 'POST' }),
+    unlinkFromProject: (projectName, refId) => authenticatedFetch(`/api/references/project/${encodeURIComponent(projectName)}/${encodeURIComponent(refId)}`, { method: 'DELETE' }),
     bulkDelete: (ids) => authenticatedFetch('/api/references/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
     tags: () => authenticatedFetch('/api/references/tags'),
   },

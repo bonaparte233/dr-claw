@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, X, Tag } from 'lucide-react';
 import { Input } from '../../ui/input';
@@ -15,11 +15,21 @@ export default function ReferenceSearchBar({ onSearch, tags }: ReferenceSearchBa
   const [query, setQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showTags, setShowTags] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleSearch = useCallback(
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const handleTextSearch = useCallback(
     (newQuery: string, newTags: string[]) => {
       setQuery(newQuery);
-      onSearch(newQuery, newTags);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        onSearch(newQuery, newTags);
+      }, 300);
     },
     [onSearch],
   );
@@ -30,14 +40,17 @@ export default function ReferenceSearchBar({ onSearch, tags }: ReferenceSearchBa
         ? selectedTags.filter((t) => t !== tag)
         : [...selectedTags, tag];
       setSelectedTags(next);
-      handleSearch(query, next);
+      // Tag toggles fire immediately (bypass debounce)
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      onSearch(query, next);
     },
-    [selectedTags, query, handleSearch],
+    [selectedTags, query, onSearch],
   );
 
   const clearAll = useCallback(() => {
     setQuery('');
     setSelectedTags([]);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     onSearch('', []);
   }, [onSearch]);
 
@@ -48,7 +61,7 @@ export default function ReferenceSearchBar({ onSearch, tags }: ReferenceSearchBa
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
-            onChange={(e) => handleSearch(e.target.value, selectedTags)}
+            onChange={(e) => handleTextSearch(e.target.value, selectedTags)}
             placeholder={t('search.placeholder')}
             className="pl-9 pr-9"
           />

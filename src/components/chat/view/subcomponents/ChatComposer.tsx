@@ -271,7 +271,7 @@ export default function ChatComposer({
           </div>
         )}
 
-        {showReferencePicker && projectName && (
+        {showReferencePicker && projectName && onReferenceContext && (
           <ReferencePicker
             projectName={projectName}
             onSelect={(context) => {
@@ -338,7 +338,7 @@ export default function ChatComposer({
                   />
                 </svg>
               </button>
-              {projectName && (
+              {projectName && onReferenceContext && (
                 <button
                   type="button"
                   onClick={() => setShowReferencePicker(!showReferencePicker)}

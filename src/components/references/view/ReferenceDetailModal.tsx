@@ -20,10 +20,14 @@ export default function ReferenceDetailModal({
   const { t } = useTranslation('references');
   const [copied, setCopied] = useState(false);
 
-  const handleCopyContext = () => {
-    navigator.clipboard.writeText(formatReferenceContext(reference));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyContext = async () => {
+    try {
+      await navigator.clipboard.writeText(formatReferenceContext(reference));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard write failed — do not show "Copied"
+    }
   };
 
   return (

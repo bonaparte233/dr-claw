@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS project_references (
     reference_id TEXT NOT NULL,
     added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(project_id, reference_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     FOREIGN KEY (reference_id) REFERENCES references_library(id) ON DELETE CASCADE
 );
 

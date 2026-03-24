@@ -33,7 +33,8 @@
     "bibtexDescription": "Upload a .bib file to import references.",
     "dropBibtex": "Drop a .bib file here or click to browse",
     "browseFile": "Browse File",
-    "importSuccess": "Imported {{count}} references"
+    "importSuccess": "Imported {{count}} references",
+    "invalidFileType": "Only .bib and .bibtex files are supported."
   },
   "browser": {
     "title": "Browse Zotero Library",

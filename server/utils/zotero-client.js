@@ -38,7 +38,7 @@ function mapZoteroItem(raw) {
     sourceId: d.key || raw.key,
     title: d.title || 'Untitled',
     authors: creators,
-    year: d.date ? parseInt(d.date, 10) || null : null,
+    year: d.date ? parseInt(d.date.match(/\b(\d{4})\b/)?.[1], 10) || null : null,
     abstract: d.abstractNote || null,
     doi: d.DOI || null,
     url: d.url || null,
@@ -95,7 +95,7 @@ export class ZoteroLocalClient {
     const params = new URLSearchParams({ limit: String(limit), start: String(start), itemType: '-attachment' });
     if (query) params.set('q', query);
     const base = collectionKey
-      ? `${this.base}/users/${libraryId}/collections/${collectionKey}/items`
+      ? `${this.base}/users/${libraryId}/collections/${encodeURIComponent(collectionKey)}/items`
       : `${this.base}/users/${libraryId}/items`;
     const raw = await fetchJson(`${base}?${params}`);
     return raw.map(mapZoteroItem);
@@ -107,7 +107,7 @@ export class ZoteroLocalClient {
 
   async getItemPdf(libraryId = 0, itemKey) {
     // Fetch children to find the PDF attachment.
-    const children = await fetchJson(`${this.base}/users/${libraryId}/items/${itemKey}/children`);
+    const children = await fetchJson(`${this.base}/users/${libraryId}/items/${encodeURIComponent(itemKey)}/children`);
     const pdfAttachment = children.find(
       (c) => (c.data?.contentType || c.contentType) === 'application/pdf',
     );

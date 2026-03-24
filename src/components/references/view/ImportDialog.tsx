@@ -18,16 +18,23 @@ export default function ImportDialog({ zoteroStatus, projectName, onClose, onCom
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [showBrowser, setShowBrowser] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const { syncing, importing, syncResult, importResult, error, syncZotero, importBibtex, clearResults } = useReferenceImport(projectName, onComplete);
 
   const handleFileSelect = async (file: File) => {
+    setLocalError(null);
     if (!file.name.endsWith('.bib') && !file.name.endsWith('.bibtex')) {
+      setLocalError(t('import.invalidFileType'));
       return;
     }
     try {
       await importBibtex(file);
     } catch {
       // error is set in state
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -94,7 +101,7 @@ export default function ImportDialog({ zoteroStatus, projectName, onClose, onCom
                   <Button
                     size="sm"
                     onClick={() => { syncZotero().catch(() => {}); }}
-                    disabled={syncing}
+                    disabled={!zoteroStatus?.connected || syncing}
                   >
                     {syncing ? (
                       <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
@@ -161,10 +168,10 @@ export default function ImportDialog({ zoteroStatus, projectName, onClose, onCom
               )}
             </div>
 
-            {error && (
+            {(error || localError) && (
               <div className="mt-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                {error}
+                {localError || error}
               </div>
             )}
 

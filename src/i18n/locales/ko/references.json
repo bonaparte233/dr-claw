@@ -33,7 +33,8 @@
     "bibtexDescription": ".bib 파일을 업로드하여 참고문헌을 가져옵니다.",
     "dropBibtex": ".bib 파일을 여기에 드롭하거나 클릭하여 찾아보기",
     "browseFile": "파일 찾아보기",
-    "importSuccess": "{{count}}개의 참고문헌을 가져왔습니다"
+    "importSuccess": "{{count}}개의 참고문헌을 가져왔습니다",
+    "invalidFileType": ".bib 및 .bibtex 파일만 지원됩니다."
   },
   "browser": {
     "title": "Zotero 라이브러리 탐색",

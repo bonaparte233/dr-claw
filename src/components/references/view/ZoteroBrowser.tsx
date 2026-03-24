@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Folder, FolderOpen, Loader2, CheckCircle, Check, Library } from 'lucide-react';
 import { Button } from '../../ui/button';
@@ -76,6 +76,12 @@ function CollectionTreeItem({
 export default function ZoteroBrowser({ projectName, onClose, onImportComplete }: ZoteroBrowserProps) {
   const { t } = useTranslation('references');
   const { syncZotero, fetchZoteroCollections, fetchZoteroItems } = useReferenceImport(projectName);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const [step, setStep] = useState<Step>('collections');
   const [collections, setCollections] = useState<ZoteroCollection[]>([]);
@@ -156,7 +162,9 @@ export default function ZoteroBrowser({ projectName, onClose, onImportComplete }
       setImporting(false);
       // Brief pause to show success, then return
       setTimeout(() => {
-        onImportComplete();
+        if (mountedRef.current) {
+          onImportComplete();
+        }
       }, 1200);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');

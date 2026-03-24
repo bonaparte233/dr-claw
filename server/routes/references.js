@@ -96,6 +96,9 @@ router.get('/zotero/items', async (req, res) => {
       return res.status(503).json({ error: 'Zotero not available' });
     }
     const { collectionKey, limit, start } = req.query;
+    if (collectionKey && !/^[A-Za-z0-9]+$/.test(collectionKey)) {
+      return res.status(400).json({ error: 'Invalid collectionKey format' });
+    }
     const libraries = await client.getLibraries();
     const libraryId = libraries[0]?.id;
     const items = await client.getItems(libraryId, {
@@ -124,6 +127,9 @@ router.post('/sync/zotero', async (req, res) => {
     }
 
     const { collectionKey, projectName, sourceIds } = req.body || {};
+    if (collectionKey && !/^[A-Za-z0-9]+$/.test(collectionKey)) {
+      return res.status(400).json({ error: 'Invalid collectionKey format' });
+    }
     const libraries = await client.getLibraries();
     const libraryId = libraries[0]?.id;
 
@@ -198,7 +204,7 @@ router.post('/import/bibtex', upload.single('file'), async (req, res) => {
 /** GET /api/references/project/:projectName — references linked to a project */
 router.get('/project/:projectName', async (req, res) => {
   try {
-    const refs = referencesDb.getProjectReferences(req.params.projectName);
+    const refs = referencesDb.getProjectReferences(req.params.projectName, req.user.id);
     res.json({ references: refs });
   } catch (error) {
     console.error('Error fetching project references:', error);
@@ -209,7 +215,10 @@ router.get('/project/:projectName', async (req, res) => {
 /** POST /api/references/project/:projectName/:id — link reference to project */
 router.post('/project/:projectName/:id', async (req, res) => {
   try {
-    referencesDb.linkToProject(req.params.projectName, req.params.id);
+    const linked = referencesDb.linkToProject(req.params.projectName, req.params.id, req.user.id);
+    if (!linked) {
+      return res.status(404).json({ error: 'Reference not found' });
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Error linking reference:', error);
@@ -220,7 +229,7 @@ router.post('/project/:projectName/:id', async (req, res) => {
 /** DELETE /api/references/project/:projectName/:id — unlink reference from project */
 router.delete('/project/:projectName/:id', async (req, res) => {
   try {
-    const removed = referencesDb.unlinkFromProject(req.params.projectName, req.params.id);
+    const removed = referencesDb.unlinkFromProject(req.params.projectName, req.params.id, req.user.id);
     if (!removed) {
       return res.status(404).json({ error: 'Link not found' });
     }
@@ -242,6 +251,9 @@ router.post('/bulk-delete', async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'ids array is required' });
     }
+    if (ids.length > 500) {
+      return res.status(400).json({ error: 'Cannot delete more than 500 references at once' });
+    }
     const deleted = referencesDb.bulkDeleteReferences(req.user.id, ids);
     res.json({ success: true, deleted });
   } catch (error) {
@@ -254,12 +266,18 @@ router.post('/bulk-delete', async (req, res) => {
 router.get('/:id/pdf', async (req, res) => {
   try {
     ensurePdfCacheDir();
-    const ref = referencesDb.getReference(req.params.id);
+    const ref = referencesDb.getReference(req.params.id, req.user.id);
     if (!ref) {
       return res.status(404).json({ error: 'Reference not found' });
     }
 
-    const pdfPath = path.join(PDF_CACHE_DIR, `${ref.id}.pdf`);
+    // Sanitize ID for filesystem path and verify no traversal
+    const safeId = ref.id.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const pdfPath = path.join(PDF_CACHE_DIR, `${safeId}.pdf`);
+    const resolvedPath = path.resolve(pdfPath);
+    if (!resolvedPath.startsWith(path.resolve(PDF_CACHE_DIR))) {
+      return res.status(400).json({ error: 'Invalid reference ID' });
+    }
 
     // Serve from cache if available
     if (fs.existsSync(pdfPath)) {
@@ -292,7 +310,7 @@ router.get('/:id/pdf', async (req, res) => {
 /** GET /api/references/:id — single reference detail */
 router.get('/:id', async (req, res) => {
   try {
-    const ref = referencesDb.getReference(req.params.id);
+    const ref = referencesDb.getReference(req.params.id, req.user.id);
     if (!ref) {
       return res.status(404).json({ error: 'Reference not found' });
     }

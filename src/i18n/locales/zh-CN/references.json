@@ -33,7 +33,8 @@
     "bibtexDescription": "上传 .bib 文件以导入文献。",
     "dropBibtex": "拖放 .bib 文件到此处或点击浏览",
     "browseFile": "浏览文件",
-    "importSuccess": "已导入 {{count}} 篇文献"
+    "importSuccess": "已导入 {{count}} 篇文献",
+    "invalidFileType": "仅支持 .bib 和 .bibtex 文件。"
   },
   "browser": {
     "title": "浏览 Zotero 文献库",
