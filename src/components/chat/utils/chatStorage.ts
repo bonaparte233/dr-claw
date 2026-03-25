@@ -1,6 +1,44 @@
-import type { ClaudeSettings } from '../types/types';
+import type { ProviderSettings } from '../types/types';
 
 export const CLAUDE_SETTINGS_KEY = 'claude-settings';
+export const GEMINI_SETTINGS_KEY = 'gemini-settings';
+export const CURSOR_SETTINGS_KEY = 'cursor-tools-settings';
+export const CODEX_SETTINGS_KEY = 'codex-settings';
+const SESSION_TIMER_PREFIX = 'session_timer_start_';
+
+const safeSessionStorage = {
+  setItem: (key: string, value: string) => {
+    try {
+      sessionStorage.setItem(key, value);
+    } catch (error) {
+      console.error('sessionStorage setItem error:', error);
+    }
+  },
+  getItem: (key: string): string | null => {
+    try {
+      return sessionStorage.getItem(key);
+    } catch (error) {
+      console.error('sessionStorage getItem error:', error);
+      return null;
+    }
+  },
+  removeItem: (key: string) => {
+    try {
+      sessionStorage.removeItem(key);
+    } catch (error) {
+      console.error('sessionStorage removeItem error:', error);
+    }
+  },
+};
+
+export function getProviderSettingsKey(provider?: string) {
+  switch (provider) {
+    case 'gemini': return GEMINI_SETTINGS_KEY;
+    case 'cursor': return CURSOR_SETTINGS_KEY;
+    case 'codex': return CODEX_SETTINGS_KEY;
+    default: return CLAUDE_SETTINGS_KEY;
+  }
+}
 
 export const safeLocalStorage = {
   setItem: (key: string, value: string) => {
@@ -74,8 +112,52 @@ export const safeLocalStorage = {
   },
 };
 
-export function getClaudeSettings(): ClaudeSettings {
-  const raw = safeLocalStorage.getItem(CLAUDE_SETTINGS_KEY);
+export function persistSessionTimerStart(sessionId: string | null | undefined, startTime: number | null | undefined) {
+  if (!sessionId || !Number.isFinite(startTime)) {
+    return;
+  }
+
+  safeSessionStorage.setItem(`${SESSION_TIMER_PREFIX}${sessionId}`, String(startTime));
+}
+
+export function readSessionTimerStart(sessionId: string | null | undefined): number | null {
+  if (!sessionId) {
+    return null;
+  }
+
+  const raw = safeSessionStorage.getItem(`${SESSION_TIMER_PREFIX}${sessionId}`);
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function clearSessionTimerStart(sessionId: string | null | undefined) {
+  if (!sessionId) {
+    return;
+  }
+
+  safeSessionStorage.removeItem(`${SESSION_TIMER_PREFIX}${sessionId}`);
+}
+
+export function moveSessionTimerStart(fromSessionId: string | null | undefined, toSessionId: string | null | undefined) {
+  if (!fromSessionId || !toSessionId || fromSessionId === toSessionId) {
+    return;
+  }
+
+  const startTime = readSessionTimerStart(fromSessionId);
+  if (!Number.isFinite(startTime)) {
+    return;
+  }
+
+  persistSessionTimerStart(toSessionId, startTime);
+  clearSessionTimerStart(fromSessionId);
+}
+
+export function getProviderSettings(provider?: string): ProviderSettings {
+  const raw = safeLocalStorage.getItem(getProviderSettingsKey(provider));
   if (!raw) {
     return {
       allowedTools: [],

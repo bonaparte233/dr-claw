@@ -1,13 +1,30 @@
-import type { ImportedProjectAnalysisPrompt, PendingAutoIntake, Project, ProjectSession, SessionMode, SessionProvider } from '../../../types/app';
+import type {
+  ImportedProjectAnalysisPrompt,
+  PendingAutoIntake,
+  Project,
+  ProjectSession,
+  SessionMode,
+  SessionProvider,
+} from '../../../types/app';
 
 export type Provider = SessionProvider;
 
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
 
+export const RESUMING_STATUS_TEXT = 'Resuming...';
+
 export interface ChatImage {
   data: string;
   name: string;
   mimeType?: string;
+}
+
+export interface ChatAttachment {
+  name: string;
+  kind: 'image' | 'pdf';
+  mimeType?: string;
+  path?: string;
+  extractedTextPreview?: string;
 }
 
 export interface ToolResult {
@@ -31,6 +48,7 @@ export interface ChatMessage {
   content?: string;
   timestamp: string | number | Date;
   images?: ChatImage[];
+  attachments?: ChatAttachment[];
   reasoning?: string;
   isThinking?: boolean;
   isStreaming?: boolean;
@@ -51,7 +69,7 @@ export interface ChatMessage {
   [key: string]: unknown;
 }
 
-export interface ClaudeSettings {
+export interface ProviderSettings {
   allowedTools: string[];
   disallowedTools: string[];
   skipPermissions: boolean;
@@ -60,7 +78,7 @@ export interface ClaudeSettings {
   [key: string]: unknown;
 }
 
-export interface ClaudePermissionSuggestion {
+export interface PermissionSuggestion {
   toolName: string;
   entry: string;
   isAllowed: boolean;
@@ -69,7 +87,7 @@ export interface ClaudePermissionSuggestion {
 export interface PermissionGrantResult {
   success: boolean;
   alreadyAllowed?: boolean;
-  updatedSettings?: ClaudeSettings;
+  updatedSettings?: ProviderSettings;
 }
 
 export interface PendingPermissionRequest {
@@ -107,7 +125,11 @@ export interface ChatInterfaceProps {
   onSessionNotProcessing?: (sessionId?: string | null) => void;
   processingSessions?: Set<string>;
   onReplaceTemporarySession?: (sessionId?: string | null) => void;
-  onNavigateToSession?: (targetSessionId: string) => void;
+  onNavigateToSession?: (
+    targetSessionId: string,
+    targetProvider?: SessionProvider,
+    targetProjectName?: string,
+  ) => void;
   onShowSettings?: () => void;
   autoExpandTools?: boolean;
   showRawParameters?: boolean;
@@ -121,6 +143,7 @@ export interface ChatInterfaceProps {
   clearPendingAutoIntake?: () => void;
   importedProjectAnalysisPrompt?: ImportedProjectAnalysisPrompt | null;
   clearImportedProjectAnalysisPrompt?: () => void;
+  onOpenShellForSession?: () => void;
   initialInputDraft?: string | null;
   newSessionMode?: SessionMode;
   onNewSessionModeChange?: (mode: SessionMode) => void;

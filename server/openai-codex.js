@@ -14,6 +14,9 @@
  */
 
 import { Codex } from '@openai/codex-sdk';
+import { encodeProjectPath, reconcileCodexSessionIndex } from './projects.js';
+import { sessionDb } from './database/db.js';
+import { recordIndexedSession } from './utils/sessionIndex.js';
 
 // Track active sessions
 const activeCodexSessions = new Map();
@@ -222,6 +225,42 @@ function mapPermissionModeToCodexOptions(permissionMode) {
   }
 }
 
+function buildCodexInput(command, attachments) {
+  const imagePaths = Array.isArray(attachments?.imagePaths)
+    ? attachments.imagePaths.filter((value) => typeof value === 'string' && value.trim())
+    : [];
+  const documentPaths = Array.isArray(attachments?.documentPaths)
+    ? attachments.documentPaths.filter((value) => typeof value === 'string' && value.trim())
+    : [];
+
+  if (imagePaths.length === 0 && documentPaths.length === 0) {
+    return command;
+  }
+
+  const textSections = [command];
+
+  if (documentPaths.length > 0) {
+    textSections.push(
+      `Attached workspace PDF path(s):\n${documentPaths
+        .map((filePath) => `- ${filePath}`)
+        .join('\n')}`,
+    );
+  }
+
+  if (imagePaths.length > 0) {
+    textSections.push(
+      imagePaths.length === 1
+        ? 'An image is attached below.'
+        : `There are ${imagePaths.length} attached images below.`,
+    );
+  }
+
+  return [
+    { type: 'text', text: textSections.join('\n\n') },
+    ...imagePaths.map((filePath) => ({ type: 'local_image', path: filePath })),
+  ];
+}
+
 /**
  * Execute a Codex query with streaming
  * @param {string} command - The prompt to send
@@ -234,6 +273,8 @@ export async function queryCodex(command, options = {}, ws) {
     cwd,
     projectPath,
     model,
+    env,
+    attachments,
     permissionMode = 'default',
     sessionMode
   } = options;
@@ -248,7 +289,7 @@ export async function queryCodex(command, options = {}, ws) {
 
   try {
     // Initialize Codex SDK
-    codex = new Codex();
+    codex = new Codex(env ? { env } : undefined);
 
     // Thread options with sandbox and approval settings
     const threadOptions = {
@@ -275,10 +316,18 @@ export async function queryCodex(command, options = {}, ws) {
       codex,
       status: 'running',
       abortController,
-      startedAt: new Date().toISOString()
+      startTime: Date.now()
     });
 
     // Send session created event
+    if (workingDirectory) {
+      recordIndexedSession({
+        sessionId: currentSessionId,
+        provider: 'codex',
+        projectPath: workingDirectory,
+        sessionMode: sessionMode || 'research',
+      });
+    }
     sendMessage(ws, {
       type: 'session-created',
       sessionId: currentSessionId,
@@ -287,7 +336,8 @@ export async function queryCodex(command, options = {}, ws) {
     });
 
     // Execute with streaming
-    const streamedTurn = await thread.runStreamed(command, {
+    const codexInput = buildCodexInput(command, attachments);
+    const streamedTurn = await thread.runStreamed(codexInput, {
       signal: abortController.signal
     });
 
@@ -353,12 +403,17 @@ export async function queryCodex(command, options = {}, ws) {
           : event.type === 'item.completed' ? 'completed' : 'other';
       }
 
+      // Add startTime for frontend timer synchronization
+      const activeSession = currentSessionId ? activeCodexSessions.get(currentSessionId) : null;
+      if (Number.isFinite(activeSession?.startTime)) {
+        transformed.startTime = activeSession.startTime;
+      }
+
       sendMessage(ws, {
         type: 'codex-response',
         data: transformed,
         sessionId: currentSessionId
       });
-
       // Extract and send token usage if available (normalized to match Claude format)
       if (event.type === 'turn.completed' && event.usage) {
         const totalTokens = (event.usage.input_tokens || 0) + (event.usage.output_tokens || 0);
@@ -373,12 +428,30 @@ export async function queryCodex(command, options = {}, ws) {
       }
     }
 
-    // Send completion event
+    const actualSessionId = thread.id || currentSessionId;
+
+    // Send completion event immediately so the UI can settle
     sendMessage(ws, {
       type: 'codex-complete',
       sessionId: currentSessionId,
-      actualSessionId: thread.id
+      actualSessionId
     });
+
+    // Post-completion housekeeping — runs after the UI receives the completion signal
+    if (workingDirectory && actualSessionId) {
+      try {
+        await reconcileCodexSessionIndex(workingDirectory, {
+          sessionId: actualSessionId,
+          previousSessionId: currentSessionId,
+          projectName: encodeProjectPath(workingDirectory),
+        });
+        if (currentSessionId && actualSessionId !== currentSessionId) {
+          sessionDb.deleteSession(currentSessionId);
+        }
+      } catch (error) {
+        console.warn(`[Codex] Failed to reconcile indexed session ${actualSessionId}:`, error.message);
+      }
+    }
 
   } catch (error) {
     const session = currentSessionId ? activeCodexSessions.get(currentSessionId) : null;
@@ -440,6 +513,16 @@ export function isCodexSessionActive(sessionId) {
 }
 
 /**
+ * Get the start time of a Codex session
+ * @param {string} sessionId - Session ID
+ * @returns {number|null} Start time in ms or null
+ */
+export function getCodexSessionStartTime(sessionId) {
+  const session = activeCodexSessions.get(sessionId);
+  return session ? session.startTime : null;
+}
+
+/**
  * Get all active sessions
  * @returns {Array} - Array of active session info
  */
@@ -451,7 +534,7 @@ export function getActiveCodexSessions() {
       sessions.push({
         id,
         status: session.status,
-        startedAt: session.startedAt
+        startTime: session.startTime
       });
     }
   }
@@ -485,8 +568,8 @@ setInterval(() => {
 
   for (const [id, session] of activeCodexSessions.entries()) {
     if (session.status !== 'running') {
-      const startedAt = new Date(session.startedAt).getTime();
-      if (now - startedAt > maxAge) {
+      const startTime = typeof session.startTime === 'number' ? session.startTime : Number.NaN;
+      if (Number.isFinite(startTime) && now - startTime > maxAge) {
         activeCodexSessions.delete(id);
       }
     }

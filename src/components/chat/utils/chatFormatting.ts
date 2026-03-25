@@ -165,3 +165,23 @@ export function formatUsageLimitText(text: string) {
     return text;
   }
 }
+
+// Re-export from shared module — single source of truth for both server and client
+import { splitLegacyGeminiThoughtContent } from '../../../../shared/geminiThoughtParser.js';
+export { splitLegacyGeminiThoughtContent };
+
+export function buildAssistantMessages(
+  content: string,
+  timestamp: Date | string | number,
+): Array<{ type: string; content: string; timestamp: Date | string | number; isThinking?: boolean }> {
+  const legacySegments = splitLegacyGeminiThoughtContent(content);
+  if (legacySegments) {
+    return legacySegments.map((segment) => ({
+      type: 'assistant',
+      content: segment.content,
+      timestamp,
+      ...(segment.isThinking ? { isThinking: true } : {}),
+    }));
+  }
+  return [{ type: 'assistant', content, timestamp }];
+}

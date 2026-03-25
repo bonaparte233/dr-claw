@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import readline from 'readline';
 
-import { getCodexSessions, getGeminiSessions } from './projects.js';
+import { encodeProjectPath, getCodexSessions, getGeminiSessions } from './projects.js';
 
 const CACHE_TTL_MS = 5_000;
 
@@ -16,6 +16,9 @@ function createEmptyUsageTotals() {
     weekTokens: 0,
   };
 }
+
+const LEGACY_DEFAULT_WORKSPACES_ROOT = path.join(os.homedir(), 'vibelab');
+const CURRENT_DEFAULT_WORKSPACES_ROOT = path.join(os.homedir(), 'dr-claw');
 
 function normalizeProjectRefs(projectRefs = []) {
   return projectRefs
@@ -58,8 +61,38 @@ function addUsageForTimestamp(target, timestampMs, tokens, bounds) {
   }
 }
 
-function getClaudeProjectDir(projectName) {
-  return path.join(os.homedir(), '.claude', 'projects', projectName);
+function remapCurrentProjectPathToLegacy(projectPath) {
+  if (!projectPath) {
+    return null;
+  }
+
+  const normalizedPath = path.resolve(projectPath);
+  if (
+    normalizedPath !== CURRENT_DEFAULT_WORKSPACES_ROOT &&
+    !normalizedPath.startsWith(CURRENT_DEFAULT_WORKSPACES_ROOT + path.sep)
+  ) {
+    return null;
+  }
+
+  return path.join(
+    LEGACY_DEFAULT_WORKSPACES_ROOT,
+    path.relative(CURRENT_DEFAULT_WORKSPACES_ROOT, normalizedPath),
+  );
+}
+
+function getClaudeProjectDirs(projectRef) {
+  const projectDirs = new Set();
+
+  if (projectRef?.fullPath) {
+    projectDirs.add(path.join(os.homedir(), '.claude', 'projects', encodeProjectPath(projectRef.fullPath)));
+
+    const legacyProjectPath = remapCurrentProjectPathToLegacy(projectRef.fullPath);
+    if (legacyProjectPath) {
+      projectDirs.add(path.join(os.homedir(), '.claude', 'projects', encodeProjectPath(legacyProjectPath)));
+    }
+  }
+
+  return [...projectDirs];
 }
 
 async function collectJsonlFiles(dirPath) {
@@ -96,16 +129,14 @@ function getClaudeUsageSnapshot(entry) {
   }
 
   const inputTokens = Number(usage.input_tokens || 0);
-  const cacheCreationTokens = Number(usage.cache_creation_input_tokens || 0);
-  const cacheReadTokens = Number(usage.cache_read_input_tokens || 0);
   const outputTokens = Number(usage.output_tokens || 0);
-  const totalTokens = inputTokens + cacheCreationTokens + cacheReadTokens + outputTokens;
+  // Keep Claude aligned with Codex/Gemini by counting model input/output only.
+  // Cache fields are metadata about prompt reuse and otherwise inflate dashboard totals.
+  const totalTokens = inputTokens + outputTokens;
 
   return {
     timestampMs: new Date(entry.timestamp || 0).getTime(),
     inputTokens,
-    cacheCreationTokens,
-    cacheReadTokens,
     outputTokens,
     totalTokens,
   };
@@ -113,8 +144,10 @@ function getClaudeUsageSnapshot(entry) {
 
 async function summarizeClaudeProject(projectRef, bounds) {
   const totals = createEmptyUsageTotals();
-  const projectDir = getClaudeProjectDir(projectRef.name);
-  const jsonlFiles = await collectJsonlFiles(projectDir);
+  const projectDirs = getClaudeProjectDirs(projectRef);
+  const jsonlFiles = (
+    await Promise.all(projectDirs.map((projectDir) => collectJsonlFiles(projectDir)))
+  ).flat();
   const requestUsageMap = new Map();
   let fallbackIndex = 0;
 
@@ -154,8 +187,6 @@ async function summarizeClaudeProject(projectRef, bounds) {
           requestUsageMap.set(requestKey, {
             timestampMs: Math.max(previous.timestampMs, snapshot.timestampMs),
             inputTokens: Math.max(previous.inputTokens, snapshot.inputTokens),
-            cacheCreationTokens: Math.max(previous.cacheCreationTokens, snapshot.cacheCreationTokens),
-            cacheReadTokens: Math.max(previous.cacheReadTokens, snapshot.cacheReadTokens),
             outputTokens: Math.max(previous.outputTokens, snapshot.outputTokens),
             totalTokens: Math.max(previous.totalTokens, snapshot.totalTokens),
           });

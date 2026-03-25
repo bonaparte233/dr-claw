@@ -1,16 +1,16 @@
 import React, { memo, useMemo } from 'react';
-import { User } from 'lucide-react';
+import { FileImage, FileText, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import SessionProviderLogo from '../../../SessionProviderLogo';
 import type {
   ChatMessage,
-  ClaudePermissionSuggestion,
+  PermissionSuggestion,
   PermissionGrantResult,
   Provider,
 } from '../../types/types';
 import { Markdown } from './Markdown';
 import { formatUsageLimitText } from '../../utils/chatFormatting';
-import { getClaudePermissionSuggestion } from '../../utils/chatPermissions';
+import { getPermissionSuggestion } from '../../utils/chatPermissions';
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, shouldHideToolResult } from '../../tools';
 
@@ -27,10 +27,13 @@ interface MessageComponentProps {
   createDiff: (oldStr: string, newStr: string) => DiffLine[];
   onFileOpen?: (filePath: string, diffInfo?: unknown) => void;
   onShowSettings?: () => void;
-  onGrantToolPermission?: (suggestion: ClaudePermissionSuggestion) => PermissionGrantResult | null | undefined;
+  onGrantToolPermission?: (suggestion: PermissionSuggestion) => PermissionGrantResult | null | undefined;
+  canSuggestShellEdit?: boolean;
+  onSuggestShellEdit?: () => void;
   autoExpandTools?: boolean;
   showRawParameters?: boolean;
   showThinking?: boolean;
+  hideThinkingFold?: boolean;
   selectedProject?: Project | null;
   provider: Provider | string;
 }
@@ -43,7 +46,26 @@ type InteractiveOption = {
 
 type PermissionGrantState = 'idle' | 'granted' | 'error';
 
-const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFileOpen, onShowSettings, onGrantToolPermission, autoExpandTools, showRawParameters, showThinking, selectedProject, provider }: MessageComponentProps) => {
+function extractSkillContentTitle(content: string, fallback: string): string {
+  const commandMatch = content.match(/<command-name>([^<]+)<\/command-name>/i);
+  if (commandMatch?.[1]?.trim()) {
+    return commandMatch[1].trim();
+  }
+
+  const headingMatch = content.match(/^#\s+(.+)$/m);
+  if (headingMatch?.[1]?.trim()) {
+    return headingMatch[1].trim();
+  }
+
+  const pathMatch = content.match(/Base directory for this skill:\s*(\S+)/i);
+  if (pathMatch?.[1]) {
+    return pathMatch[1].split('/').pop() || fallback;
+  }
+
+  return fallback;
+}
+
+const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFileOpen, onShowSettings, onGrantToolPermission, canSuggestShellEdit, onSuggestShellEdit, autoExpandTools, showRawParameters, showThinking, hideThinkingFold, selectedProject, provider }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const isGrouped = prevMessage && prevMessage.type === message.type &&
                    ((prevMessage.type === 'assistant') ||
@@ -52,7 +74,7 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                     (prevMessage.type === 'error'));
   const messageRef = React.useRef<HTMLDivElement | null>(null);
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const permissionSuggestion = getClaudePermissionSuggestion(message, provider);
+  const permissionSuggestion = getPermissionSuggestion(message, provider);
   const [permissionGrantState, setPermissionGrantState] = React.useState<PermissionGrantState>('idle');
 
 
@@ -94,6 +116,8 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
     return null;
   }
 
+  const visibleAttachments = Array.isArray(message.attachments) ? message.attachments : [];
+
   return (
     <div
       ref={messageRef}
@@ -104,7 +128,7 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
         <div className="w-full mb-4">
           <div className="border border-purple-200/50 dark:border-purple-800/30 rounded-lg bg-purple-50/30 dark:bg-purple-900/10 shadow-sm overflow-hidden">
             <details className="group">
-              <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-[13px] select-none hover:bg-purple-50/50 dark:hover:bg-purple-900/20 transition-colors">
+              <summary className="flex list-none items-center gap-2 px-3 py-2 cursor-pointer text-[13px] select-none hover:bg-purple-50/50 dark:hover:bg-purple-900/20 transition-colors [&::-webkit-details-marker]:hidden">
                 <svg
                   className="w-3.5 h-3.5 text-purple-400 dark:text-purple-500 transition-transform duration-150 group-open:rotate-90 flex-shrink-0"
                   fill="none"
@@ -116,14 +140,7 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                 <span className="font-bold text-purple-600 dark:text-purple-400 text-xs flex-shrink-0">Skill</span>
                 <span className="text-gray-300 dark:text-gray-700 text-[10px] flex-shrink-0 mx-0.5">|</span>
                 <span className="text-gray-500 dark:text-gray-400 truncate flex-1 font-medium text-xs">
-                  {(() => {
-                    const c = message.content || '';
-                    const cmdMatch = c.match(/<command-name>([^<]+)<\/command-name>/);
-                    if (cmdMatch) return cmdMatch[1];
-                    const pathMatch = c.match(/Base directory for this skill:\s*(\S+)/);
-                    if (pathMatch) return pathMatch[1].split('/').pop() || t('skill.contentLoaded');
-                    return t('skill.contentLoaded');
-                  })()}
+                  {extractSkillContentTitle(message.content || '', t('skill.contentLoaded'))}
                 </span>
               </summary>
               <div className="px-4 py-3 border-t border-purple-100 dark:border-purple-800/30 max-h-96 overflow-y-auto">
@@ -150,6 +167,18 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
               </div>
             )}
           </div>
+          {canSuggestShellEdit && onSuggestShellEdit && (
+            <div className="mb-1.5 mr-1">
+              <button
+                type="button"
+                onClick={onSuggestShellEdit}
+                className="text-[11px] font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                title={t('shell.historyEdit.action')}
+              >
+                {t('shell.historyEdit.action')}
+              </button>
+            </div>
+          )}
           <div className="bg-blue-600 text-white rounded-2xl rounded-tr-none px-4 py-2.5 shadow-sm max-w-[90%] sm:max-w-[85%]">
             <div className="text-[15px] whitespace-pre-wrap break-words leading-relaxed">
               {message.content}
@@ -175,6 +204,32 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
                       <span className="text-sm truncate">{img.name || 'file'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {visibleAttachments.length > 0 && (
+              <div className="mt-2 flex flex-col gap-2">
+                {visibleAttachments.map((attachment, idx) => {
+                  const Icon = attachment.kind === 'pdf' ? FileText : FileImage;
+                  return (
+                    <div
+                      key={`${attachment.name}:${attachment.path || idx}`}
+                      className="flex items-start gap-2 rounded-lg bg-white/10 px-3 py-2"
+                    >
+                      <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 opacity-80" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{attachment.name}</div>
+                        <div className="text-xs opacity-75">
+                          {attachment.kind === 'pdf' ? 'PDF uploaded to workspace' : 'Image uploaded to workspace'}
+                        </div>
+                        {attachment.path && (
+                          <div className="mt-1 break-all font-mono text-[11px] opacity-70">
+                            {attachment.path}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -423,19 +478,27 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
             ) : message.isThinking ? (
               /* Thinking messages - collapsible by default */
               <div className="text-sm text-gray-700 dark:text-gray-300">
-                <details className="group">
-                  <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 font-medium flex items-center gap-2">
-                    <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                    <span>{t('thinking.emoji')}</span>
-                  </summary>
-                  <div className="mt-2 pl-4 border-l-2 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-sm">
+                {hideThinkingFold ? (
+                  <div className="text-gray-600 dark:text-gray-400 text-sm">
                     <Markdown className="prose prose-sm max-w-none dark:prose-invert prose-gray">
                       {message.content}
                     </Markdown>
                   </div>
-                </details>
+                ) : (
+                  <details className="group">
+                    <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 font-medium flex items-center gap-2">
+                      <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                      <span>{t('thinking.emoji')}</span>
+                    </summary>
+                    <div className="mt-2 pl-4 border-l-2 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-sm">
+                      <Markdown className="prose prose-sm max-w-none dark:prose-invert prose-gray">
+                        {message.content}
+                      </Markdown>
+                    </div>
+                  </details>
+                )}
               </div>
             ) : (
               <div className="text-[15px] text-gray-700 dark:text-gray-300">
@@ -513,4 +576,3 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
 });
 
 export default MessageComponent;
-

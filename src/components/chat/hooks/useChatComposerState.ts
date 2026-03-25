@@ -15,10 +15,12 @@ import { isTelemetryEnabled } from '../../../utils/telemetry';
 
 import { thinkingModes } from '../constants/thinkingModes';
 
-import { grantClaudeToolPermission } from '../utils/chatPermissions';
-import { safeLocalStorage } from '../utils/chatStorage';
+import { grantToolPermission } from '../utils/chatPermissions';
+import { getProviderSettingsKey, persistSessionTimerStart, safeLocalStorage } from '../utils/chatStorage';
 import { consumeWorkspaceQaDraft, WORKSPACE_QA_DRAFT_EVENT } from '../../../utils/workspaceQa';
 import type {
+  ChatAttachment,
+  ChatImage,
   ChatMessage,
   PendingPermissionRequest,
   PermissionMode,
@@ -60,7 +62,7 @@ interface UseChatComposerStateArgs {
   setSessionMessages?: Dispatch<SetStateAction<any[]>>;
   setIsLoading: (loading: boolean) => void;
   setCanAbortSession: (canAbort: boolean) => void;
-  setClaudeStatus: (status: { text: string; tokens: number; can_interrupt: boolean } | null) => void;
+  setClaudeStatus: Dispatch<SetStateAction<{ text: string; tokens: number; can_interrupt: boolean; startTime?: number } | null>>;
   setIsUserScrolledUp: (isScrolledUp: boolean) => void;
   setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
   newSessionMode?: SessionMode;
@@ -80,15 +82,83 @@ interface CommandExecutionResult {
   hasFileIncludes?: boolean;
 }
 
+interface UploadedProjectFile {
+  name?: string;
+  path?: string;
+  size?: number;
+}
+
 const createFakeSubmitEvent = () => {
   return { preventDefault: () => undefined } as unknown as FormEvent<HTMLFormElement>;
 };
 
 const PROGRAMMATIC_SUBMIT_MAX_RETRIES = 12;
 const PROGRAMMATIC_SUBMIT_RETRY_DELAY_MS = 50;
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
+const CODEX_ATTACHMENT_DIR = '.dr-claw/chat-attachments';
+
+const IMAGE_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.svg',
+  '.heic',
+  '.heif',
+]);
+
+const PDF_EXTENSION = '.pdf';
+
+function getAttachmentKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function getFileExtension(file: File) {
+  const lowerName = file.name.toLowerCase();
+  const lastDot = lowerName.lastIndexOf('.');
+  return lastDot >= 0 ? lowerName.slice(lastDot) : '';
+}
+
+function isImageAttachment(file: File) {
+  return file.type.startsWith('image/') || IMAGE_EXTENSIONS.has(getFileExtension(file));
+}
+
+function isPdfAttachment(file: File) {
+  return file.type === 'application/pdf' || getFileExtension(file) === PDF_EXTENSION;
+}
+
+function getAttachmentKind(file: File) {
+  if (isImageAttachment(file)) {
+    return 'image';
+  }
+  if (isPdfAttachment(file)) {
+    return 'pdf';
+  }
+  return 'unsupported';
+}
 
 const isTemporarySessionId = (sessionId: string | null | undefined) =>
   Boolean(sessionId && sessionId.startsWith('new-session-'));
+
+const getRouteSessionId = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const match = window.location.pathname.match(/^\/session\/([^/]+)$/);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+};
 
 export function useChatComposerState({
   selectedProject,
@@ -127,9 +197,9 @@ export function useChatComposerState({
     }
     return '';
   });
-  const [attachedImages, setAttachedImages] = useState<File[]>([]);
-  const [uploadingImages, setUploadingImages] = useState<Map<string, number>>(new Map());
-  const [imageErrors, setImageErrors] = useState<Map<string, string>>(new Map());
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<Map<string, number>>(new Map());
+  const [fileErrors, setFileErrors] = useState<Map<string, string>>(new Map());
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
   const [thinkingMode, setThinkingMode] = useState('none');
   const [intakeGreeting, setIntakeGreeting] = useState<string | null>(null);
@@ -442,34 +512,78 @@ export function useChatComposerState({
     inputHighlightRef.current.scrollLeft = target.scrollLeft;
   }, []);
 
-  const handleImageFiles = useCallback((files: File[]) => {
-    const validFiles = files.filter((file) => {
+  const handleAttachmentFiles = useCallback((files: File[]) => {
+    const validFiles: File[] = [];
+
+    files.forEach((file) => {
       try {
         if (!file || typeof file !== 'object') {
           console.warn('Invalid file object:', file);
-          return false;
+          return;
         }
 
-        if (!file.size || file.size > 10 * 1024 * 1024) {
-          const fileName = file.name || 'Unknown file';
-          setImageErrors((previous) => {
+        const attachmentKey = getAttachmentKey(file);
+        const attachmentKind = getAttachmentKind(file);
+
+        if (!file.size || file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+          setFileErrors((previous) => {
             const next = new Map(previous);
-            next.set(fileName, 'File too large (max 10MB)');
+            next.set(attachmentKey, 'File too large (max 10MB)');
             return next;
           });
-          return false;
+          return;
         }
 
-        return true;
+        if (attachmentKind === 'unsupported') {
+          setFileErrors((previous) => {
+            const next = new Map(previous);
+            next.set(attachmentKey, 'Only images and PDF files are supported');
+            return next;
+          });
+          return;
+        }
+
+        validFiles.push(file);
       } catch (error) {
         console.error('Error validating file:', error, file);
-        return false;
       }
     });
 
     if (validFiles.length > 0) {
-      setAttachedImages((previous) => [...previous, ...validFiles].slice(0, 5));
+      setAttachedFiles((previous) => {
+        const deduped = [...previous];
+        validFiles.forEach((file) => {
+          const nextKey = getAttachmentKey(file);
+          if (!deduped.some((existing) => getAttachmentKey(existing) === nextKey)) {
+            deduped.push(file);
+          }
+        });
+        return deduped.slice(0, MAX_ATTACHMENTS);
+      });
     }
+  }, []);
+
+  const removeAttachedFile = useCallback((index: number) => {
+    setAttachedFiles((previous) => {
+      const next = [...previous];
+      const [removedFile] = next.splice(index, 1);
+
+      if (removedFile) {
+        const attachmentKey = getAttachmentKey(removedFile);
+        setFileErrors((previousErrors) => {
+          const nextErrors = new Map(previousErrors);
+          nextErrors.delete(attachmentKey);
+          return nextErrors;
+        });
+        setUploadingFiles((previousUploads) => {
+          const nextUploads = new Map(previousUploads);
+          nextUploads.delete(attachmentKey);
+          return nextUploads;
+        });
+      }
+
+      return next;
+    });
   }, []);
 
   const handlePaste = useCallback(
@@ -482,28 +596,88 @@ export function useChatComposerState({
         }
         const file = item.getAsFile();
         if (file) {
-          handleImageFiles([file]);
+          handleAttachmentFiles([file]);
         }
       });
 
       if (items.length === 0 && event.clipboardData.files.length > 0) {
         const files = Array.from(event.clipboardData.files);
         if (files.length > 0) {
-          handleImageFiles(files);
+          handleAttachmentFiles(files);
         }
       }
     },
-    [handleImageFiles],
+    [handleAttachmentFiles],
   );
 
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
-    maxSize: 10 * 1024 * 1024,
-    maxFiles: 5,
-    onDrop: handleImageFiles,
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.heic', '.heif'],
+      'application/pdf': ['.pdf'],
+    },
+    maxSize: MAX_ATTACHMENT_SIZE_BYTES,
+    maxFiles: MAX_ATTACHMENTS,
+    onDrop: handleAttachmentFiles,
     noClick: true,
     noKeyboard: true,
   });
+
+  const uploadPreviewImages = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) {
+        return [];
+      }
+
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append('images', file);
+      });
+
+      const response = await authenticatedFetch(`/api/projects/${encodeURIComponent(selectedProject?.name || '')}/upload-images`, {
+        method: 'POST',
+        headers: {},
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload images');
+      }
+
+      const result = await response.json();
+      return Array.isArray(result.images) ? (result.images as ChatImage[]) : [];
+    },
+    [selectedProject?.name],
+  );
+
+  const uploadFilesToProject = useCallback(
+    async (files: File[]) => {
+      if (!selectedProject || files.length === 0) {
+        return [];
+      }
+
+      const formData = new FormData();
+      const targetDir = `${CODEX_ATTACHMENT_DIR}/${Date.now()}`;
+      formData.append('targetDir', targetDir);
+      files.forEach((file) => {
+        formData.append('files', file);
+      });
+
+      const response = await authenticatedFetch(`/api/projects/${encodeURIComponent(selectedProject.name)}/upload-files`, {
+        method: 'POST',
+        headers: {},
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload files');
+      }
+
+      const result = await response.json();
+      return Array.isArray(result.files) ? (result.files as UploadedProjectFile[]) : [];
+    },
+    [selectedProject],
+  );
 
   const handleSubmit = useCallback(
     async (
@@ -525,9 +699,9 @@ export function useChatComposerState({
           await executeCommand(matchedCommand, trimmedInput);
           setInput('');
           inputValueRef.current = '';
-          setAttachedImages([]);
-          setUploadingImages(new Map());
-          setImageErrors(new Map());
+          setAttachedFiles([]);
+          setUploadingFiles(new Map());
+          setFileErrors(new Map());
           resetCommandMenuState();
           setIsTextareaExpanded(false);
           if (textareaRef.current) {
@@ -557,26 +731,87 @@ export function useChatComposerState({
         setIntakeGreeting(null);
       }
 
-      let uploadedImages: unknown[] = [];
-      if (attachedImages.length > 0) {
-        const formData = new FormData();
-        attachedImages.forEach((file) => {
-          formData.append('images', file);
-        });
-
-        try {
-          const response = await authenticatedFetch(`/api/projects/${selectedProject.name}/upload-images`, {
-            method: 'POST',
-            headers: {},
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to upload images');
+      let uploadedImages: ChatImage[] = [];
+      let codexAttachmentPayload:
+        | {
+            imagePaths: string[];
+            documentPaths: string[];
           }
+        | undefined;
+      let messageAttachments: ChatAttachment[] = [];
 
-          const result = await response.json();
-          uploadedImages = result.images;
+      if (provider === 'cursor' && attachedFiles.length > 0) {
+        setChatMessages((previous) => [
+          ...previous,
+          {
+            type: 'error',
+            content: 'Cursor chat attachments are not supported yet.',
+            timestamp: new Date(),
+          },
+        ]);
+        return;
+      }
+
+      if (provider === 'codex' && attachedFiles.length > 0) {
+        try {
+          const uploadedFiles = await uploadFilesToProject(attachedFiles);
+          codexAttachmentPayload = uploadedFiles.reduce(
+            (
+              accumulator: {
+                imagePaths: string[];
+                documentPaths: string[];
+              },
+              uploadedFile: UploadedProjectFile,
+              index: number,
+            ) => {
+              const sourceFile = attachedFiles[index];
+              const uploadedPath =
+                uploadedFile?.path && typeof uploadedFile.path === 'string' ? uploadedFile.path : null;
+
+              if (!sourceFile || !uploadedPath) {
+                return accumulator;
+              }
+
+              if (isImageAttachment(sourceFile)) {
+                accumulator.imagePaths.push(uploadedPath);
+              } else if (isPdfAttachment(sourceFile)) {
+                accumulator.documentPaths.push(uploadedPath);
+              }
+
+              return accumulator;
+            },
+            {
+              imagePaths: [] as string[],
+              documentPaths: [] as string[],
+            },
+          );
+          messageAttachments = attachedFiles.map((file, index) => {
+            const uploadedFile = uploadedFiles[index];
+            const uploadedPath = uploadedFile?.path && typeof uploadedFile.path === 'string' ? uploadedFile.path : undefined;
+
+            return {
+              name: file.name,
+              kind: isImageAttachment(file) ? 'image' : 'pdf',
+              mimeType: file.type || undefined,
+              path: uploadedPath,
+            };
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          console.error('Codex attachment upload failed:', error);
+          setChatMessages((previous) => [
+            ...previous,
+            {
+              type: 'error',
+              content: `Failed to upload attachments for Codex: ${message}`,
+              timestamp: new Date(),
+            },
+          ]);
+          return;
+        }
+      } else if (attachedFiles.length > 0) {
+        try {
+          uploadedImages = await uploadPreviewImages(attachedFiles);
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
           console.error('Image upload failed:', error);
@@ -595,7 +830,8 @@ export function useChatComposerState({
       const userMessage: ChatMessage = {
         type: 'user',
         content: currentInput,
-        images: uploadedImages as any,
+        images: uploadedImages,
+        attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
         timestamp: new Date(),
       };
 
@@ -604,49 +840,61 @@ export function useChatComposerState({
         clearTimeout(abortTimeoutRef.current);
         abortTimeoutRef.current = null;
       }
+      const turnStartTime = Date.now();
       setIsLoading(true);
       setCanAbortSession(true);
       setClaudeStatus({
         text: 'Processing',
         tokens: 0,
         can_interrupt: true,
+        startTime: turnStartTime,
       });
 
       setIsUserScrolledUp(false);
       setTimeout(() => scrollToBottom(), 100);
 
-      // Determine the session ID to use.
-      // If we're on the home route ('/') and currentSessionId is null, we are starting a new session.
-      const isExplicitNewSession = !currentSessionId && window.location.pathname === '/';
-      const isNewSession = isExplicitNewSession || (!currentSessionId && !selectedSession?.id);
+      // Reuse the session currently represented by the route or pending view state.
+      // This prevents interrupted chats from being treated as brand new sessions.
+      const routedSessionId = getRouteSessionId();
       
-      const effectiveSessionId = isExplicitNewSession 
-        ? null 
-        : (currentSessionId || selectedSession?.id || (provider === 'gemini' ? sessionStorage.getItem('geminiSessionId') : sessionStorage.getItem('cursorSessionId')));
+      // If we're on the root path with no routed session AND no selected session, 
+      // treat it as an explicit new session start and clear any stale provider-specific session IDs.
+      const isExplicitNewSessionStart = window.location.pathname === '/' && !routedSessionId && !selectedSession?.id;
+      if (isExplicitNewSessionStart && typeof window !== 'undefined') {
+        sessionStorage.removeItem('geminiSessionId');
+        sessionStorage.removeItem('cursorSessionId');
+        sessionStorage.removeItem('pendingSessionId');
+      }
+
+      const providerSessionId =
+        provider === 'gemini'
+          ? sessionStorage.getItem('geminiSessionId')
+          : provider === 'cursor'
+          ? sessionStorage.getItem('cursorSessionId')
+          : null;
+      const pendingViewSessionId = pendingViewSessionRef.current?.sessionId || null;
+      const effectiveSessionId =
+        currentSessionId ||
+        selectedSession?.id ||
+        routedSessionId ||
+        pendingViewSessionId ||
+        providerSessionId;
+      const isNewSession = !effectiveSessionId;
       const sessionToActivate = effectiveSessionId || `new-session-${Date.now()}`;
 
       if (!effectiveSessionId && !selectedSession?.id) {
         if (typeof window !== 'undefined') {
           // Reset stale pending IDs from previous interrupted runs before creating a new one.
           sessionStorage.removeItem('pendingSessionId');
-          if (provider === 'gemini') {
-            sessionStorage.removeItem('geminiSessionId');
-          }
         }
         pendingViewSessionRef.current = { sessionId: null, startedAt: Date.now() };
       }
+      persistSessionTimerStart(sessionToActivate, turnStartTime);
       onSessionActive?.(sessionToActivate);
 
       const getToolsSettings = () => {
         try {
-          const settingsKey =
-            provider === 'cursor'
-              ? 'cursor-tools-settings'
-              : provider === 'codex'
-              ? 'codex-settings'
-              : provider === 'gemini'
-              ? 'gemini-settings'
-              : 'claude-settings';
+          const settingsKey = getProviderSettingsKey(provider);
           const savedSettings = safeLocalStorage.getItem(settingsKey);
           if (savedSettings) {
             return JSON.parse(savedSettings);
@@ -726,6 +974,7 @@ export function useChatComposerState({
             resume: Boolean(effectiveSessionId),
             model: codexModel,
             permissionMode: permissionMode === 'plan' ? 'default' : permissionMode,
+            attachments: codexAttachmentPayload,
             telemetryEnabled,
             sessionMode: isNewSession ? newSessionMode : selectedSession?.mode,
           },
@@ -753,9 +1002,9 @@ export function useChatComposerState({
       setInput('');
       inputValueRef.current = '';
       resetCommandMenuState();
-      setAttachedImages([]);
-      setUploadingImages(new Map());
-      setImageErrors(new Map());
+      setAttachedFiles([]);
+      setUploadingFiles(new Map());
+      setFileErrors(new Map());
       setIsTextareaExpanded(false);
       setThinkingMode('none');
 
@@ -766,7 +1015,7 @@ export function useChatComposerState({
       safeLocalStorage.removeItem(`draft_input_${selectedProject.name}`);
     },
     [
-      attachedImages,
+      attachedFiles,
       claudeModel,
       codexModel,
       currentSessionId,
@@ -791,6 +1040,8 @@ export function useChatComposerState({
       slashCommands,
       thinkingMode,
       intakeGreeting,
+      uploadFilesToProject,
+      uploadPreviewImages,
     ],
   );
 
@@ -1064,10 +1315,10 @@ export function useChatComposerState({
 
   const handleGrantToolPermission = useCallback(
     (suggestion: { entry: string; toolName: string }) => {
-      if (!suggestion || provider !== 'claude') {
+      if (!suggestion || (provider !== 'claude' && provider !== 'gemini')) {
         return { success: false };
       }
-      return grantClaudeToolPermission(suggestion.entry);
+      return grantToolPermission(suggestion.entry, provider);
     },
     [provider],
   );
@@ -1152,14 +1403,14 @@ export function useChatComposerState({
     selectedFileIndex,
     renderInputWithMentions,
     selectFile,
-    attachedImages,
-    setAttachedImages,
-    uploadingImages,
-    imageErrors,
+    attachedFiles,
+    removeAttachedFile,
+    uploadingFiles,
+    fileErrors,
     getRootProps,
     getInputProps,
     isDragActive,
-    openImagePicker: open,
+    openFilePicker: open,
     handleSubmit,
     handleInputChange,
     handleKeyDown,

@@ -1,5 +1,14 @@
 import type { Dispatch, MouseEvent, RefObject, SetStateAction } from 'react';
-import type { AppTab, ImportedProjectAnalysisPrompt, PendingAutoIntake, Project, ProjectSession, SessionMode } from '../../../types/app';
+import type {
+  AppTab,
+  ImportedProjectAnalysisPrompt,
+  PendingAutoIntake,
+  Project,
+  ProjectSession,
+  SessionMode,
+  SessionProvider,
+  TrashProject,
+} from '../../../types/app';
 
 export type SessionLifecycleHandler = (sessionId?: string | null) => void;
 
@@ -48,6 +57,7 @@ export interface PrdFile {
 
 export interface MainContentProps {
   projects: Project[];
+  trashProjects: TrashProject[];
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
   activeTab: AppTab;
@@ -58,6 +68,7 @@ export interface MainContentProps {
   isMobile: boolean;
   onMenuClick: () => void;
   isLoading: boolean;
+  isTrashLoading?: boolean;
   onInputFocusChange: (focused: boolean) => void;
   onSessionActive: SessionLifecycleHandler;
   onSessionInactive: SessionLifecycleHandler;
@@ -65,7 +76,11 @@ export interface MainContentProps {
   onSessionNotProcessing: SessionLifecycleHandler;
   processingSessions: Set<string>;
   onReplaceTemporarySession: SessionLifecycleHandler;
-  onNavigateToSession: (targetSessionId: string) => void;
+  onNavigateToSession: (
+    targetSessionId: string,
+    targetProvider?: SessionProvider,
+    targetProjectName?: string,
+  ) => void;
   onShowSettings: () => void;
   externalMessageUpdate: number;
   pendingAutoIntake?: PendingAutoIntake | null;
