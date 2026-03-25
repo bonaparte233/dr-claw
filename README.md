@@ -149,9 +149,15 @@ npm run dev
 
 5. **Use the application**
 
-There are two ways to interact with Dr. Claw: the **terminal-only** workflow or the **frontend UI**. The terminal approach is more stable and lightweight; the UI provides richer visualization but may encounter occasional bugs.
+There are two ways to interact with Dr. Claw: the **frontend UI** workflow or the **terminal-only**. The UI provides richer visualization but may encounter occasional bugs; the terminal approach is more stable and lightweight.
 
-#### Option A: Terminal Only
+#### Option A: Frontend UI
+
+Open your browser at `http://localhost:5173` (or the port you configured in `.env`).
+
+
+
+#### Option B: Terminal Only
 
 Open a **second terminal** (keep `npm run dev` running in the first) and install the `drclaw` CLI harness:
 
@@ -169,6 +175,8 @@ Navigate to the project directory you want to work in and launch your agent (e.g
 
 ```bash
 cd /path/to/your/project
+
+### can use gemini, claude, or codex once you are logged in
 claude
 ```
 
@@ -182,9 +190,6 @@ Skills from `dr-claw/skills/` are automatically symlinked into each project's `.
   <img src="public/screenshots/terminal_example.png" alt="Terminal workflow example" width="600">
 </p>
 
-#### Option B: Frontend UI
-
-Open your browser at `http://localhost:5173` (or the port you configured in `.env`).
 
 If agent web search does not work later, see [Troubleshooting Web Search](#step-4--troubleshooting-web-search) below.
 
