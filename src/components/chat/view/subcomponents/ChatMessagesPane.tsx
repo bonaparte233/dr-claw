@@ -7,7 +7,7 @@ import AgentTurnContainer from './AgentTurnContainer';
 import ProviderSelectionEmptyState from './ProviderSelectionEmptyState';
 import SessionProviderLogo from '../../../SessionProviderLogo';
 import { Markdown } from './Markdown';
-import type { ChatMessage } from '../../types/types';
+import type { AttachedPrompt, ChatMessage } from '../../types/types';
 import type { ProviderAvailability } from '../../types/types';
 import type { Project, ProjectSession, SessionMode, SessionProvider } from '../../../../types/app';
 import AssistantThinkingIndicator from './AssistantThinkingIndicator';
@@ -28,6 +28,7 @@ interface ChatMessagesPaneProps {
   setProvider: (provider: SessionProvider) => void;
   textareaRef: RefObject<HTMLTextAreaElement>;
   setInput: Dispatch<SetStateAction<string>>;
+  setAttachedPrompt?: (prompt: AttachedPrompt | null) => void;
   claudeModel: string;
   setClaudeModel: (model: string) => void;
   cursorModel: string;
@@ -62,6 +63,7 @@ interface ChatMessagesPaneProps {
   providerAvailability: Record<SessionProvider, ProviderAvailability>;
   newSessionMode?: SessionMode;
   onNewSessionModeChange?: (mode: SessionMode) => void;
+  onRetry?: () => void;
 }
 
 export default function ChatMessagesPane({
@@ -76,6 +78,7 @@ export default function ChatMessagesPane({
   setProvider,
   textareaRef,
   setInput,
+  setAttachedPrompt,
   claudeModel,
   setClaudeModel,
   cursorModel,
@@ -110,6 +113,7 @@ export default function ChatMessagesPane({
   providerAvailability,
   newSessionMode = 'research',
   onNewSessionModeChange,
+  onRetry,
 }: ChatMessagesPaneProps) {
   const { t } = useTranslation('chat');
   const messageKeyMapRef = useRef<WeakMap<ChatMessage, string>>(new WeakMap());
@@ -197,6 +201,7 @@ export default function ChatMessagesPane({
             setGeminiModel={setGeminiModel}
             projectName={selectedProject.name}
             setInput={setInput}
+            setAttachedPrompt={setAttachedPrompt}
             providerAvailability={providerAvailability}
             newSessionMode={newSessionMode}
             onNewSessionModeChange={onNewSessionModeChange}
@@ -333,6 +338,7 @@ export default function ChatMessagesPane({
                   showThinking={showThinking}
                   selectedProject={selectedProject}
                   provider={provider}
+                  onRetry={onRetry}
                 />
               );
             }
@@ -351,6 +357,7 @@ export default function ChatMessagesPane({
                 showThinking={showThinking}
                 selectedProject={selectedProject}
                 provider={provider}
+                onRetry={onRetry}
               />
             );
           })}

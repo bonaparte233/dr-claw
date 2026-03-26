@@ -13,6 +13,10 @@
     "codex": "Codex",
     "gemini": "Gemini"
   },
+  "error": {
+    "retry": "重试",
+    "usageLimitHint": "使用限制重置后可以重试"
+  },
   "tools": {
     "settings": "工具设置",
     "error": "工具错误",
@@ -108,8 +112,10 @@
     "placeholderDefault": "输入您的消息...",
     "disabled": "输入已禁用",
     "attachFiles": "附加文件",
+    "attachReferences": "附加文献",
     "attachImages": "附加图片",
     "dropFilesHere": "拖放文件到此处",
+    "attachmentOnlyFallback": "请先查看我附上的文件，并基于这些文件帮助我。",
     "send": "发送",
     "stop": "停止",
     "hintText": {
@@ -347,6 +353,11 @@
         "description": "基于论文内容生成演示文稿、旁白脚本、音频与演示视频。"
       }
     }
+  },
+  "attachedPrompt": {
+    "showPrompt": "显示提示词",
+    "hidePrompt": "隐藏提示词",
+    "remove": "移除"
   },
   "pipelineOnboarding": {
     "noBrief": {

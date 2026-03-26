@@ -699,6 +699,13 @@ export function useChatRealtimeHandlers({
         flushAndFinalizePendingStream();
         clearLoadingIndicators();
         markSessionsAsCompleted(erroredSessionId, currentSessionId, selectedSession?.id);
+        // Clear pendingSessionId for the errored session (not all sessions — other tabs may be active)
+        if (typeof window !== 'undefined') {
+          const pendingSessionId = sessionStorage.getItem('pendingSessionId');
+          if (pendingSessionId && (!erroredSessionId || pendingSessionId === erroredSessionId)) {
+            sessionStorage.removeItem('pendingSessionId');
+          }
+        }
         setPendingPermissionRequests([]);
         const details = typeof latestMessage.details === 'string' ? latestMessage.details.trim() : '';
         const errorContent = details
@@ -715,6 +722,8 @@ export function useChatRealtimeHandlers({
               type: 'error',
               content: errorContent,
               timestamp: new Date(),
+              errorType: latestMessage.errorType,
+              isRetryable: latestMessage.isRetryable === true,
             },
           ];
         });
@@ -758,7 +767,7 @@ export function useChatRealtimeHandlers({
         setPendingPermissionRequests([]);
         setChatMessages((previous) => [
           ...previous,
-          { type: 'error', content: `Cursor error: ${latestMessage.error || 'Unknown error'}`, timestamp: new Date() },
+          { type: 'error', content: `Cursor error: ${latestMessage.error || 'Unknown error'}`, timestamp: new Date(), errorType: latestMessage.errorType, isRetryable: latestMessage.isRetryable === true },
         ]);
         break;
 
@@ -1170,7 +1179,7 @@ export function useChatRealtimeHandlers({
         clearLoadingIndicators();
         markSessionsAsCompleted(latestMessage.sessionId, currentSessionId, selectedSession?.id);
         setPendingPermissionRequests([]);
-        setChatMessages((previous) => [...previous, { type: 'error', content: latestMessage.error || 'An error occurred with Codex', timestamp: new Date() }]);
+        setChatMessages((previous) => [...previous, { type: 'error', content: latestMessage.error || 'An error occurred with Codex', timestamp: new Date(), errorType: latestMessage.errorType, isRetryable: latestMessage.isRetryable === true }]);
         break;
 
       case 'session-aborted': {

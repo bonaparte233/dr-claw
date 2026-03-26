@@ -21,7 +21,7 @@ export interface ChatImage {
 
 export interface ChatAttachment {
   name: string;
-  kind: 'image' | 'pdf';
+  kind: 'image' | 'pdf' | 'file';
   mimeType?: string;
   path?: string;
   extractedTextPreview?: string;
@@ -41,6 +41,13 @@ export interface SubagentChildTool {
   toolInput: unknown;
   toolResult?: ToolResult | null;
   timestamp: Date;
+}
+
+export interface AttachedPrompt {
+  scenarioId: string;
+  scenarioIcon: string;
+  scenarioTitle: string;
+  promptText: string;
 }
 
 export interface ChatMessage {
@@ -66,6 +73,9 @@ export interface ChatMessage {
     currentToolIndex: number;
     isComplete: boolean;
   };
+  attachedPrompt?: AttachedPrompt;
+  errorType?: 'usage_limit' | 'overloaded' | 'network' | 'auth' | 'unknown';
+  isRetryable?: boolean;
   [key: string]: unknown;
 }
 

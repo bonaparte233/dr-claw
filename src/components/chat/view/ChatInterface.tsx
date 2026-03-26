@@ -21,6 +21,7 @@ import { Button } from '../../ui/button';
 import type { PendingAutoIntake } from '../../../types/app';
 import { CLAUDE_MODELS, CURSOR_MODELS, CODEX_MODELS, GEMINI_MODELS } from '../../../../shared/modelConstants';
 
+
 const DEFAULT_PROVIDER_AVAILABILITY: Record<Provider, ProviderAvailability> = {
   claude: { cliAvailable: true, cliCommand: 'claude', installHint: null },
   cursor: { cliAvailable: true, cliCommand: 'agent', installHint: null },
@@ -183,6 +184,8 @@ function ChatInterface({
   const {
     input,
     setInput,
+    attachedPrompt,
+    setAttachedPrompt,
     textareaRef,
     inputHighlightRef,
     isTextareaExpanded,
@@ -226,6 +229,7 @@ function ChatInterface({
     isInputFocused,
     intakeGreeting,
     setIntakeGreeting,
+    setPendingStageTagKeys,
     submitProgrammaticInput,
   } = useChatComposerState({
     selectedProject,
@@ -284,6 +288,19 @@ function ChatInterface({
     onNavigateToSession,
   });
 
+  const chatMessagesRef = useRef(chatMessages);
+  chatMessagesRef.current = chatMessages;
+
+  const handleRetry = useCallback(() => {
+    const msgs = chatMessagesRef.current;
+    let lastUserMessage: (typeof msgs)[number] | undefined;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].type === 'user') { lastUserMessage = msgs[i]; break; }
+    }
+    if (!lastUserMessage?.content) return;
+    submitProgrammaticInput(lastUserMessage.content);
+  }, [submitProgrammaticInput]);
+
   const autoIntakeTriggeredRef = useRef(false);
   const lastAutoIntakeTriggerIdRef = useRef<string | null>(null);
   const [importedProjectAnalysisProvider, setImportedProjectAnalysisProvider] = React.useState<Provider>('claude');
@@ -325,6 +342,15 @@ function ChatInterface({
     if (importedProjectAnalysisProvider === 'gemini') return geminiModel;
     return cursorModel;
   }, [claudeModel, codexModel, cursorModel, geminiModel, importedProjectAnalysisProvider]);
+
+  const handleStartTaskInChat = useCallback((prompt?: string, task?: { stage?: string } | null) => {
+    const nextPrompt = prompt && prompt.trim()
+      ? prompt
+      : t('tasks.nextTaskPrompt', { defaultValue: 'Start the next task' });
+    setInput(nextPrompt);
+    const stage = String(task?.stage || '').trim().toLowerCase();
+    setPendingStageTagKeys(stage ? [stage] : []);
+  }, [setInput, setPendingStageTagKeys, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -611,9 +637,7 @@ function ChatInterface({
         </div>
         <div className="flex justify-end px-4 pb-4">
           <ChatTaskProgressPill
-            onStartTask={(prompt?: string) =>
-              setInput(prompt && prompt.trim() ? prompt : t('tasks.nextTaskPrompt', { defaultValue: 'Start the next task' }))
-            }
+            onStartTask={handleStartTaskInChat}
             onShowAllTasks={onShowAllTasks}
           />
         </div>
@@ -703,6 +727,7 @@ function ChatInterface({
           setProvider={(nextProvider) => setProvider(nextProvider as Provider)}
           textareaRef={textareaRef}
           setInput={setInput}
+          setAttachedPrompt={setAttachedPrompt}
           claudeModel={claudeModel}
           setClaudeModel={setClaudeModel}
           cursorModel={cursorModel}
@@ -736,18 +761,17 @@ function ChatInterface({
           providerAvailability={providerAvailability}
           newSessionMode={newSessionMode}
           onNewSessionModeChange={onNewSessionModeChange}
+          onRetry={handleRetry}
         />
 
         <div className="px-2 sm:px-4 max-w-5xl mx-auto w-full">
           <div className="flex gap-4">
             <div className="flex-1 min-w-0">
-              <SkillShortcutsPanel setInput={setInput} textareaRef={textareaRef} />
+              <SkillShortcutsPanel setInput={setInput} textareaRef={textareaRef} setAttachedPrompt={setAttachedPrompt} />
             </div>
             <div className="flex-1 min-w-0">
               <ChatTaskProgressPill
-                onStartTask={(prompt?: string) =>
-                  setInput(prompt && prompt.trim() ? prompt : t('tasks.nextTaskPrompt', { defaultValue: 'Start the next task' }))
-                }
+                onStartTask={handleStartTaskInChat}
                 onShowAllTasks={onShowAllTasks}
               />
             </div>
@@ -769,7 +793,7 @@ function ChatInterface({
           tokenBudget={tokenBudget}
           slashCommandsCount={slashCommandsCount}
           onToggleCommandMenu={handleToggleCommandMenu}
-          hasInput={Boolean(input.trim())}
+          hasInput={Boolean(input.trim()) || attachedFiles.length > 0}
           onClearInput={handleClearInput}
           isUserScrolledUp={isUserScrolledUp}
           hasMessages={chatMessages.length > 0}
@@ -818,6 +842,15 @@ function ChatInterface({
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
           onTranscript={handleTranscript}
+          projectName={selectedProject?.name}
+          onReferenceContext={(context) => {
+            setInput((prev) => prev ? `${prev}\n\n${context}` : context);
+          }}
+          attachedPrompt={attachedPrompt}
+          onRemoveAttachedPrompt={() => setAttachedPrompt(null)}
+          onUpdateAttachedPrompt={(text) =>
+            setAttachedPrompt((prev) => prev ? { ...prev, promptText: text } : null)
+          }
         />
       </div>
 

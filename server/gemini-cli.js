@@ -7,8 +7,10 @@ import { createRequestId, waitForToolApproval, matchesToolPermission } from './u
 import { encodeProjectPath, ensureProjectSkillLinks, reconcileGeminiSessionIndex } from './projects.js';
 import { writeProjectTemplates } from './templates/index.js';
 import { stripInternalContextPrefix } from './utils/sessionFormatting.js';
-import { recordIndexedSession } from './utils/sessionIndex.js';
+import { applyStageTagsToSession, recordIndexedSession } from './utils/sessionIndex.js';
+import { buildTempAttachmentFilename, toPortableAtPath } from './utils/imageAttachmentFiles.js';
 import { splitLegacyGeminiThoughtContent } from '../shared/geminiThoughtParser.js';
+import { classifyError } from '../shared/errorClassifier.js';
 
 // Use cross-spawn on Windows for better command execution
 const spawnFunction = process.platform === 'win32' ? crossSpawn : spawn;
@@ -394,9 +396,7 @@ async function handleGeminiAttachments(command, attachments, workingDir) {
       const matches = data.match(/^data:([^;]+);base64,(.+)$/);
       if (!matches) continue;
       const [, mimeType, base64Data] = matches;
-      const ext = mimeType.includes('/') ? mimeType.split('/')[1] : 'bin';
-      const originalName = item?.name ? String(item.name).replace(/[^a-zA-Z0-9._-]/g, '_') : null;
-      const filename = originalName || `attachment_${index}.${ext}`;
+      const filename = buildTempAttachmentFilename(index, item?.name, mimeType);
       const filepath = path.join(tempDir, filename);
       await fs.writeFile(filepath, Buffer.from(base64Data, 'base64'));
       tempFilePaths.push(filepath);
@@ -406,7 +406,10 @@ async function handleGeminiAttachments(command, attachments, workingDir) {
       return { modifiedCommand: command, tempFilePaths, tempDir };
     }
 
-    const note = `\n\n[Attached files]\n${tempFilePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
+    const referencedPaths = tempFilePaths.map((filePath) => {
+      return toPortableAtPath(filePath, workingDir || process.cwd());
+    });
+    const note = `\n\nAttached files:\n${referencedPaths.join('\n')}`;
     return { modifiedCommand: `${command}${note}`, tempFilePaths, tempDir };
   } catch (error) {
     console.error('[Gemini] Failed to process attachments:', error.message);
@@ -474,7 +477,7 @@ async function syncSessionMetadata(sessionId, projectPath, sessionMode = 'resear
  */
 export async function spawnGemini(command, options = {}, ws) {
   return new Promise(async (resolve, reject) => {
-    const { sessionId, projectPath, cwd, model, images, attachments, permissionMode, toolsSettings, sessionMode, env } = options;
+    const { sessionId, projectPath, cwd, model, images, attachments, permissionMode, toolsSettings, sessionMode, stageTagKeys, stageTagSource = 'task_context', env } = options;
     let capturedSessionId = sessionId;
     let sessionCreatedSent = false;
     let messageStartedSent = false;
@@ -494,6 +497,16 @@ export async function spawnGemini(command, options = {}, ws) {
     let policyViolationTriggered = false;
     
     const workingDir = cwd || projectPath || process.cwd();
+
+    // Synchronous (better-sqlite3) — no await needed.
+    if (sessionId && workingDir) {
+      applyStageTagsToSession({
+        sessionId,
+        projectPath: workingDir,
+        stageTagKeys,
+        source: stageTagSource,
+      });
+    }
 
     // Keep Gemini session bootstrap parity with Claude sessions:
     // ensure skill links and instruction templates exist in project workspace.
@@ -670,9 +683,14 @@ export async function spawnGemini(command, options = {}, ws) {
         return;
       }
       lastSentGeminiErrorSummary = summary;
+
+      const { errorType, isRetryable } = classifyError(summary);
+
       ws.send({
         type: 'gemini-error',
         error: summary,
+        errorType,
+        isRetryable,
         ...(typeof details === 'string' && details.trim() ? { details } : {}),
         sessionId: capturedSessionId || sessionId || null
       });
@@ -814,6 +832,8 @@ export async function spawnGemini(command, options = {}, ws) {
                   provider: 'gemini',
                   projectPath: workingDir,
                   sessionMode: sessionMode || 'research',
+                  stageTagKeys,
+                  tagSource: stageTagSource,
                 });
                 ws.send({ type: 'session-created', sessionId: capturedSessionId, provider: 'gemini', mode: sessionMode || 'research' });
               }

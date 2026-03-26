@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { FileImage, FileText, User } from 'lucide-react';
+import { FileImage, FileText, User, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import SessionProviderLogo from '../../../SessionProviderLogo';
 import type {
@@ -36,6 +36,7 @@ interface MessageComponentProps {
   hideThinkingFold?: boolean;
   selectedProject?: Project | null;
   provider: Provider | string;
+  onRetry?: () => void;
 }
 
 type InteractiveOption = {
@@ -65,7 +66,7 @@ function extractSkillContentTitle(content: string, fallback: string): string {
   return fallback;
 }
 
-const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFileOpen, onShowSettings, onGrantToolPermission, canSuggestShellEdit, onSuggestShellEdit, autoExpandTools, showRawParameters, showThinking, hideThinkingFold, selectedProject, provider }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFileOpen, onShowSettings, onGrantToolPermission, canSuggestShellEdit, onSuggestShellEdit, autoExpandTools, showRawParameters, showThinking, hideThinkingFold, selectedProject, provider, onRetry }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const isGrouped = prevMessage && prevMessage.type === message.type &&
                    ((prevMessage.type === 'assistant') ||
@@ -180,9 +181,19 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
             </div>
           )}
           <div className="bg-blue-600 text-white rounded-2xl rounded-tr-none px-4 py-2.5 shadow-sm max-w-[90%] sm:max-w-[85%]">
-            <div className="text-[15px] whitespace-pre-wrap break-words leading-relaxed">
-              {message.content}
-            </div>
+            {message.attachedPrompt && (
+              <div className={message.content?.trim() ? 'mb-1.5' : ''}>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-100 text-xs font-medium">
+                  <span>{message.attachedPrompt.scenarioIcon}</span>
+                  {message.attachedPrompt.scenarioTitle}
+                </span>
+              </div>
+            )}
+            {message.content?.trim() && (
+              <div className="text-[15px] whitespace-pre-wrap break-words leading-relaxed">
+                {message.content}
+              </div>
+            )}
             {message.images && message.images.length > 0 && (
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {message.images.map((img, idx) => {
@@ -212,7 +223,13 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
             {visibleAttachments.length > 0 && (
               <div className="mt-2 flex flex-col gap-2">
                 {visibleAttachments.map((attachment, idx) => {
-                  const Icon = attachment.kind === 'pdf' ? FileText : FileImage;
+                  const Icon = attachment.kind === 'image' ? FileImage : FileText;
+                  const attachmentDescription =
+                    attachment.kind === 'pdf'
+                      ? 'PDF uploaded to workspace'
+                      : attachment.kind === 'image'
+                      ? 'Image uploaded to workspace'
+                      : 'File uploaded to workspace';
                   return (
                     <div
                       key={`${attachment.name}:${attachment.path || idx}`}
@@ -221,9 +238,7 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                       <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 opacity-80" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{attachment.name}</div>
-                        <div className="text-xs opacity-75">
-                          {attachment.kind === 'pdf' ? 'PDF uploaded to workspace' : 'Image uploaded to workspace'}
-                        </div>
+                        <div className="text-xs opacity-75">{attachmentDescription}</div>
                         {attachment.path && (
                           <div className="mt-1 break-all font-mono text-[11px] opacity-70">
                             {attachment.path}
@@ -560,9 +575,27 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                     </div>
                   );
                 })()}
+
+                {message.type === 'error' && message.isRetryable && onRetry && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onRetry()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-medium rounded-md border border-red-200/60 dark:border-red-800/40 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      {t('error.retry')}
+                    </button>
+                    {message.errorType === 'usage_limit' && (
+                      <span className="text-xs text-red-500 dark:text-red-400">
+                        {t('error.usageLimitHint')}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
-            
+
             {!isGrouped && (
               <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
                 {formattedTime}
