@@ -101,7 +101,9 @@ const projectsHaveChanges = (
     return (
       serialize(nextProject.cursorSessions) !== serialize(prevProject.cursorSessions) ||
       serialize(nextProject.codexSessions) !== serialize(prevProject.codexSessions) ||
-      serialize(nextProject.geminiSessions) !== serialize(prevProject.geminiSessions)
+      serialize(nextProject.geminiSessions) !== serialize(prevProject.geminiSessions) ||
+      serialize(nextProject.openrouterSessions) !== serialize(prevProject.openrouterSessions) ||
+      serialize(nextProject.localSessions) !== serialize(prevProject.localSessions)
     );
   });
 };
@@ -112,6 +114,8 @@ const getProjectSessions = (project: Project): ProjectSession[] => {
     ...(project.codexSessions ?? []),
     ...(project.cursorSessions ?? []),
     ...(project.geminiSessions ?? []),
+    ...(project.openrouterSessions ?? []),
+    ...(project.localSessions ?? []),
   ];
 };
 
@@ -172,12 +176,16 @@ const applySessionTagsToProject = (
   const nextCursorSessions = applySessionTagsToList(project.cursorSessions, detail, 'cursor');
   const nextCodexSessions = applySessionTagsToList(project.codexSessions, detail, 'codex');
   const nextGeminiSessions = applySessionTagsToList(project.geminiSessions, detail, 'gemini');
+  const nextOpenrouterSessions = applySessionTagsToList(project.openrouterSessions, detail, 'openrouter');
+  const nextLocalSessions = applySessionTagsToList(project.localSessions, detail, 'local');
 
   if (
     nextClaudeSessions === project.sessions &&
     nextCursorSessions === project.cursorSessions &&
     nextCodexSessions === project.codexSessions &&
-    nextGeminiSessions === project.geminiSessions
+    nextGeminiSessions === project.geminiSessions &&
+    nextOpenrouterSessions === project.openrouterSessions &&
+    nextLocalSessions === project.localSessions
   ) {
     return project;
   }
@@ -188,6 +196,8 @@ const applySessionTagsToProject = (
     cursorSessions: nextCursorSessions,
     codexSessions: nextCodexSessions,
     geminiSessions: nextGeminiSessions,
+    openrouterSessions: nextOpenrouterSessions,
+    localSessions: nextLocalSessions,
   };
 };
 
@@ -394,6 +404,9 @@ export function useProjectsState({
       const rawMode = latestMessage.mode;
       const modeValue = typeof rawMode === 'string' ? rawMode : null;
       const sessionMode: SessionMode = isSessionMode(modeValue) ? modeValue : 'research';
+      const createdProvider = latestMessage.provider as ProjectSession['__provider'];
+      const createdDisplayName = latestMessage.displayName as string | undefined;
+      const createdProjectName = latestMessage.projectName as string | undefined;
 
       setProjects((prevProjects) => prevProjects.map((project) => {
         const updateSessionList = (
@@ -427,7 +440,38 @@ export function useProjectsState({
           cursorSessions: updateSessionList(project.cursorSessions, 'cursor'),
           codexSessions: updateSessionList(project.codexSessions, 'codex'),
           geminiSessions: updateSessionList(project.geminiSessions, 'gemini'),
+          openrouterSessions: updateSessionList(project.openrouterSessions, 'openrouter'),
+          localSessions: updateSessionList(project.localSessions, 'local'),
         };
+
+        if (createdProjectName && project.name === createdProjectName && createdProvider) {
+          const sessionArrayKey = createdProvider === 'claude' ? 'sessions'
+            : createdProvider === 'cursor' ? 'cursorSessions'
+            : createdProvider === 'codex' ? 'codexSessions'
+            : createdProvider === 'gemini' ? 'geminiSessions'
+            : createdProvider === 'openrouter' ? 'openrouterSessions'
+            : createdProvider === 'local' ? 'localSessions'
+            : null;
+
+          if (sessionArrayKey) {
+            const arr = (nextProject[sessionArrayKey] as ProjectSession[] | undefined) || [];
+            const alreadyExists = arr.some((s) => s.id === latestMessage.sessionId);
+            if (!alreadyExists) {
+              const fallbackName = createdProvider === 'local' ? 'Local GPU Session' : 'New Session';
+              const newSession: ProjectSession = {
+                id: latestMessage.sessionId as string,
+                name: createdDisplayName || fallbackName,
+                summary: createdDisplayName || fallbackName,
+                mode: sessionMode,
+                __provider: createdProvider,
+                __projectName: project.name,
+                createdAt: new Date().toISOString(),
+                lastActivity: new Date().toISOString(),
+              };
+              (nextProject as Record<string, unknown>)[sessionArrayKey] = [newSession, ...arr];
+            }
+          }
+        }
 
         return nextProject;
       }));
@@ -604,6 +648,20 @@ export function useProjectsState({
       if (geminiSession) {
         matchedProject = project;
         matchedSession = { ...geminiSession, __provider: 'gemini' };
+        break;
+      }
+
+      const openrouterSession = project.openrouterSessions?.find((session) => session.id === targetSessionId);
+      if (openrouterSession) {
+        matchedProject = project;
+        matchedSession = { ...openrouterSession, __provider: 'openrouter' };
+        break;
+      }
+
+      const localSession = project.localSessions?.find((session) => session.id === targetSessionId);
+      if (localSession) {
+        matchedProject = project;
+        matchedSession = { ...localSession, __provider: 'local' };
         break;
       }
     }
@@ -811,10 +869,18 @@ export function useProjectsState({
         navigate('/');
       }
 
+      const filterOut = (list?: ProjectSession[]) =>
+        list?.filter((session) => session.id !== sessionIdToDelete) ?? [];
+
       setProjects((prevProjects) =>
         prevProjects.map((project) => ({
           ...project,
-          sessions: project.sessions?.filter((session) => session.id !== sessionIdToDelete) ?? [],
+          sessions: filterOut(project.sessions),
+          cursorSessions: filterOut(project.cursorSessions),
+          codexSessions: filterOut(project.codexSessions),
+          geminiSessions: filterOut(project.geminiSessions),
+          openrouterSessions: filterOut(project.openrouterSessions),
+          localSessions: filterOut(project.localSessions),
           sessionMeta: {
             ...project.sessionMeta,
             total: Math.max(0, (project.sessionMeta?.total as number | undefined ?? 0) - 1),

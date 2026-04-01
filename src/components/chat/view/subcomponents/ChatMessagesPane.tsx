@@ -13,8 +13,7 @@ import type { Project, ProjectSession, SessionMode, SessionProvider } from '../.
 import AssistantThinkingIndicator from './AssistantThinkingIndicator';
 import { getIntrinsicMessageKey } from '../../utils/messageKeys';
 import { groupMessagesIntoTurns } from '../../utils/groupAgentTurns';
-
-const WORKSPACE_QA_GREETING = `Ask about any file, module, or implementation detail in this workspace. I will stay focused on code and project structure unless you explicitly ask to start research planning.`;
+import { getProviderDisplayName } from '../../utils/chatFormatting';
 
 interface ChatMessagesPaneProps {
   scrollContainerRef: RefObject<HTMLDivElement>;
@@ -37,6 +36,10 @@ interface ChatMessagesPaneProps {
   setCodexModel: (model: string) => void;
   geminiModel: string;
   setGeminiModel: (model: string) => void;
+  openrouterModel: string;
+  setOpenrouterModel: (model: string) => void;
+  localModel: string;
+  setLocalModel: (model: string) => void;
   isLoadingMoreMessages: boolean;
   hasMoreMessages: boolean;
   totalMessages: number;
@@ -59,6 +62,7 @@ interface ChatMessagesPaneProps {
   showThinking?: boolean;
   selectedProject: Project;
   isLoading: boolean;
+  statusText?: string | null;
   intakeGreeting?: string | null;
   providerAvailability: Record<SessionProvider, ProviderAvailability>;
   newSessionMode?: SessionMode;
@@ -87,6 +91,10 @@ export default function ChatMessagesPane({
   setCodexModel,
   geminiModel,
   setGeminiModel,
+  openrouterModel,
+  setOpenrouterModel,
+  localModel,
+  setLocalModel,
   isLoadingMoreMessages,
   hasMoreMessages,
   totalMessages,
@@ -109,6 +117,7 @@ export default function ChatMessagesPane({
   showThinking,
   selectedProject,
   isLoading,
+  statusText,
   intakeGreeting,
   providerAvailability,
   newSessionMode = 'research',
@@ -199,6 +208,10 @@ export default function ChatMessagesPane({
             setCodexModel={setCodexModel}
             geminiModel={geminiModel}
             setGeminiModel={setGeminiModel}
+            openrouterModel={openrouterModel}
+            setOpenrouterModel={setOpenrouterModel}
+            localModel={localModel}
+            setLocalModel={setLocalModel}
             projectName={selectedProject.name}
             setInput={setInput}
             setAttachedPrompt={setAttachedPrompt}
@@ -213,7 +226,7 @@ export default function ChatMessagesPane({
                   <SessionProviderLogo provider={provider} className="w-full h-full" />
                 </div>
                 <div className="text-xs font-semibold text-gray-900 dark:text-white">
-                  {t('messageTypes.claude')}
+                  {getProviderDisplayName(provider)}
                 </div>
               </div>
               <div className="w-full pl-0">
@@ -235,7 +248,7 @@ export default function ChatMessagesPane({
               </div>
               <div className="w-full pl-0">
                 <Markdown className="prose prose-md max-w-none dark:prose-invert prose-gray text-[15.5px] leading-relaxed">
-                  {WORKSPACE_QA_GREETING}
+                  {t('session.mode.workspaceQaGreeting')}
                 </Markdown>
               </div>
             </div>
@@ -364,7 +377,7 @@ export default function ChatMessagesPane({
         </>
       )}
 
-      {isLoading && <AssistantThinkingIndicator selectedProvider={provider} />}
+      {isLoading && <AssistantThinkingIndicator selectedProvider={provider} statusText={statusText} />}
       </div>
     </div>
   );

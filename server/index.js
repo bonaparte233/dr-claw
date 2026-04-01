@@ -50,6 +50,8 @@ import { queryClaudeSDK, abortClaudeSDKSession, isClaudeSDKSessionActive, getCla
 import { spawnCursor, abortCursorSession, isCursorSessionActive, getCursorSessionStartTime, getActiveCursorSessions } from './cursor-cli.js';
 import { queryCodex, abortCodexSession, isCodexSessionActive, getCodexSessionStartTime, getActiveCodexSessions } from './openai-codex.js';
 import { spawnGemini, abortGeminiSession, isGeminiSessionActive, getGeminiSessionStartTime, getActiveGeminiSessions } from './gemini-cli.js';
+import { queryOpenRouter, abortOpenRouterSession, isOpenRouterSessionActive, getOpenRouterSessionStartTime, getActiveOpenRouterSessions } from './openrouter.js';
+import { queryLocalGPU, abortLocalGPUSession, isLocalGPUSessionActive, getLocalGPUSessionStartTime, getActiveLocalGPUSessions } from './local-gpu.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
 import mcpRoutes from './routes/mcp.js';
@@ -83,6 +85,7 @@ import {
     parsePortNumber,
     setRuntimePortSync,
 } from './utils/runtimePorts.js';
+import { buildCodexTokenUsageFromJsonl } from './utils/sessionTokenUsage.js';
 
 // File system watchers for provider project/session folders
 const PROVIDER_WATCH_PATHS = [
@@ -383,7 +386,8 @@ function shouldAutoOpenUrlFromOutput(value = '') {
         normalized.includes('open this url') ||
         normalized.includes('continue in your browser') ||
         normalized.includes('press enter to open') ||
-        normalized.includes('open_url:')
+        normalized.includes('open_url:') ||
+        normalized.includes('paste code here')
     );
 }
 
@@ -838,6 +842,45 @@ app.put('/api/projects/:projectName/sessions/:sessionId/tags', authenticateToken
             source: 'manual',
         });
         res.json({ success: true, tags });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/projects/:projectName/sessions/:sessionId/context-review', authenticateToken, async (req, res) => {
+    try {
+        const { projectName, sessionId } = req.params;
+        const session = sessionDb.getSessionById(sessionId);
+
+        if (!session || session.project_name !== projectName) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        res.json({
+            sessionId,
+            projectName,
+            reviews: sessionDb.getSessionContextReview(sessionId),
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.put('/api/projects/:projectName/sessions/:sessionId/context-review', authenticateToken, async (req, res) => {
+    try {
+        const { projectName, sessionId } = req.params;
+        const { reviews } = req.body || {};
+        const session = sessionDb.getSessionById(sessionId);
+
+        if (!session || session.project_name !== projectName) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        res.json({
+            sessionId,
+            projectName,
+            reviews: sessionDb.updateSessionContextReview(sessionId, reviews),
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1560,6 +1603,65 @@ function handleChatConnection(ws, request) {
                 spawnGemini(data.command, { ...data.options, env: sessionEnv }, writer).catch(error => {
                     console.error('[ERROR] Gemini spawn error:', error);
                 });
+            } else if (data.type === 'openrouter-command') {
+                console.log('[DEBUG] OpenRouter message:', data.command || '[Continue/Resume]');
+                console.log('📁 Project:', data.options?.projectPath || data.options?.cwd || 'Unknown');
+                console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
+                console.log('🤖 Model:', data.options?.model || 'default');
+                const commandTelemetryEnabled = data.options?.telemetryEnabled !== false;
+                const sessionId = data.options?.sessionId || data.sessionId;
+
+                if (sessionId && isOpenRouterSessionActive(sessionId)) {
+                    console.log(`[WARN] OpenRouter session ${sessionId} is already active. Ignoring concurrent request.`);
+                    return;
+                }
+
+                enqueueConversationTelemetry(
+                    {
+                        name: 'agent_dialogue_meta',
+                        direction: 'user_to_agent',
+                        provider: 'openrouter',
+                        sessionId: sessionId || null,
+                        projectPath: data.options?.projectPath || data.options?.cwd || null,
+                        transportType: data.type,
+                    },
+                    { ...telemetryContext, telemetryEnabled: commandTelemetryEnabled },
+                );
+                writer.telemetryContext = { ...telemetryContext, provider: 'openrouter', telemetryEnabled: commandTelemetryEnabled };
+                writer.setProjectPath(data.options?.projectPath || data.options?.cwd || null);
+                queryOpenRouter(data.command, { ...data.options, env: sessionEnv }, writer).catch(error => {
+                    console.error('[ERROR] OpenRouter query error:', error);
+                });
+            } else if (data.type === 'local-command') {
+                console.log('[DEBUG] Local GPU message:', data.command || '[Continue/Resume]');
+                console.log('📁 Project:', data.options?.projectPath || data.options?.cwd || 'Unknown');
+                console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
+                console.log('🤖 Model:', data.options?.model || 'default');
+                console.log('🖥️ Server:', data.options?.serverUrl || 'default');
+                const commandTelemetryEnabled = data.options?.telemetryEnabled !== false;
+                const sessionId = data.options?.sessionId || data.sessionId;
+
+                if (sessionId && isLocalGPUSessionActive(sessionId)) {
+                    console.log(`[WARN] Local GPU session ${sessionId} is already active. Ignoring concurrent request.`);
+                    return;
+                }
+
+                enqueueConversationTelemetry(
+                    {
+                        name: 'agent_dialogue_meta',
+                        direction: 'user_to_agent',
+                        provider: 'local',
+                        sessionId: sessionId || null,
+                        projectPath: data.options?.projectPath || data.options?.cwd || null,
+                        transportType: data.type,
+                    },
+                    { ...telemetryContext, telemetryEnabled: commandTelemetryEnabled },
+                );
+                writer.telemetryContext = { ...telemetryContext, provider: 'local', telemetryEnabled: commandTelemetryEnabled };
+                writer.setProjectPath(data.options?.projectPath || data.options?.cwd || null);
+                queryLocalGPU(data.command, { ...data.options, env: sessionEnv }, writer).catch(error => {
+                    console.error('[ERROR] Local GPU query error:', error);
+                });
             } else if (data.type === 'cursor-resume') {
                 // Backward compatibility: treat as cursor-command with resume and no prompt
                 console.log('[DEBUG] Cursor resume session (compat):', data.sessionId);
@@ -1589,6 +1691,10 @@ function handleChatConnection(ws, request) {
                     success = abortCodexSession(data.sessionId);
                 } else if (provider === 'gemini') {
                     success = abortGeminiSession(data.sessionId);
+                } else if (provider === 'openrouter') {
+                    success = abortOpenRouterSession(data.sessionId);
+                } else if (provider === 'local') {
+                    success = abortLocalGPUSession(data.sessionId);
                 } else {
                     // Use Claude Agents SDK
                     success = await abortClaudeSDKSession(data.sessionId);
@@ -1637,6 +1743,12 @@ function handleChatConnection(ws, request) {
                 } else if (provider === 'gemini') {
                     isActive = isGeminiSessionActive(sessionId);
                     startTime = getGeminiSessionStartTime(sessionId);
+                } else if (provider === 'openrouter') {
+                    isActive = isOpenRouterSessionActive(sessionId);
+                    startTime = getOpenRouterSessionStartTime(sessionId);
+                } else if (provider === 'local') {
+                    isActive = isLocalGPUSessionActive(sessionId);
+                    startTime = getLocalGPUSessionStartTime(sessionId);
                 } else {
                     // Use Claude Agents SDK
                     isActive = isClaudeSDKSessionActive(sessionId);
@@ -1656,7 +1768,8 @@ function handleChatConnection(ws, request) {
                     claude: getActiveClaudeSDKSessions(),
                     cursor: getActiveCursorSessions(),
                     codex: getActiveCodexSessions(),
-                    gemini: getActiveGeminiSessions()
+                    gemini: getActiveGeminiSessions(),
+                    local: getActiveLocalGPUSessions()
                 };
 
                 writer.send({
@@ -2578,36 +2691,7 @@ app.get('/api/projects/:projectName/sessions/:sessionId/token-usage', authentica
         }
         throw error;
       }
-      const lines = fileContent.trim().split('\n');
-      let totalTokens = 0;
-      let contextWindow = 200000; // Default for Codex/OpenAI
-
-      // Find the latest token_count event with info (scan from end)
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try {
-          const entry = JSON.parse(lines[i]);
-
-          // Codex stores token info in event_msg with type: "token_count"
-          if (entry.type === 'event_msg' && entry.payload?.type === 'token_count' && entry.payload?.info) {
-            const tokenInfo = entry.payload.info;
-            if (tokenInfo.total_token_usage) {
-              totalTokens = tokenInfo.total_token_usage.total_tokens || 0;
-            }
-            if (tokenInfo.model_context_window) {
-              contextWindow = tokenInfo.model_context_window;
-            }
-            break; // Stop after finding the latest token count
-          }
-        } catch (parseError) {
-          // Skip lines that can't be parsed
-          continue;
-        }
-      }
-
-      return res.json({
-        used: totalTokens,
-        total: contextWindow
-      });
+      return res.json(buildCodexTokenUsageFromJsonl(fileContent));
     }
 
     // Handle Gemini sessions

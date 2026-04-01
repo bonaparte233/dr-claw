@@ -20,7 +20,9 @@ import type {
   SetStateAction,
   TouchEvent,
 } from 'react';
-import type { AttachedPrompt, PendingPermissionRequest, PermissionMode, Provider } from '../../types/types';
+import type { CodexReasoningEffortId } from '../../constants/codexReasoningEfforts';
+import type { GeminiThinkingModeId } from '../../../../../shared/geminiThinkingSupport';
+import type { AttachedPrompt, PendingPermissionRequest, PermissionMode, Provider, TokenBudget } from '../../types/types';
 
 interface MentionableFile {
   name: string;
@@ -54,9 +56,15 @@ interface ChatComposerProps {
   provider: Provider | string;
   permissionMode: PermissionMode | string;
   onModeSwitch: () => void;
+  codexModel: string;
+  geminiModel: string;
   thinkingMode: string;
   setThinkingMode: Dispatch<SetStateAction<string>>;
-  tokenBudget: { used?: number; total?: number } | null;
+  codexReasoningEffort: CodexReasoningEffortId;
+  setCodexReasoningEffort: Dispatch<SetStateAction<CodexReasoningEffortId>>;
+  geminiThinkingMode: GeminiThinkingModeId;
+  setGeminiThinkingMode: Dispatch<SetStateAction<GeminiThinkingModeId>>;
+  tokenBudget: TokenBudget | null;
   slashCommandsCount: number;
   onToggleCommandMenu: () => void;
   hasInput: boolean;
@@ -116,8 +124,14 @@ export default function ChatComposer({
   provider,
   permissionMode,
   onModeSwitch,
+  codexModel,
+  geminiModel,
   thinkingMode,
   setThinkingMode,
+  codexReasoningEffort,
+  setCodexReasoningEffort,
+  geminiThinkingMode,
+  setGeminiThinkingMode,
   tokenBudget,
   slashCommandsCount,
   onToggleCommandMenu,
@@ -208,8 +222,14 @@ export default function ChatComposer({
           permissionMode={permissionMode}
           onModeSwitch={onModeSwitch}
           provider={provider}
+          codexModel={codexModel}
+          geminiModel={geminiModel}
           thinkingMode={thinkingMode}
           setThinkingMode={setThinkingMode}
+          codexReasoningEffort={codexReasoningEffort}
+          setCodexReasoningEffort={setCodexReasoningEffort}
+          geminiThinkingMode={geminiThinkingMode}
+          setGeminiThinkingMode={setGeminiThinkingMode}
           tokenBudget={tokenBudget}
           slashCommandsCount={slashCommandsCount}
           onToggleCommandMenu={onToggleCommandMenu}

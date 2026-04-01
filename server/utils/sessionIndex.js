@@ -9,6 +9,10 @@ function defaultSessionName(provider) {
       return 'Codex Session';
     case 'gemini':
       return 'Gemini Session';
+    case 'openrouter':
+      return 'OpenRouter Session';
+    case 'local':
+      return 'Local GPU Session';
     default:
       return 'New Session';
   }
